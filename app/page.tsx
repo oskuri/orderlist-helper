@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, ArrowUpToLine } from "lucide-react";
+import { Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, ArrowUpToLine, Eraser, ChevronLeft, ChevronRight } from "lucide-react";
 
 // ――― 定数・型定義 ―――
 const COLUMNS = [
@@ -61,7 +61,7 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
       {...attributes}
       {...listeners}
       onClick={() => onSelect(tab.id)}
-      className={`shrink-0 flex items-center gap-2 px-5 py-2.5 rounded-t-lg cursor-grab transition-all ${
+      className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-t-lg cursor-grab transition-all ${
         isActive 
           ? 'bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t-2 border-emerald-500 relative z-10' 
           : 'bg-slate-200 hover:bg-slate-300 text-slate-500'
@@ -120,7 +120,6 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
     <tr 
       ref={setNodeRef} 
       style={style} 
-      // 右クリックイベントを親コンポーネントに渡す
       onContextMenu={(e) => onContextMenu(e, rowIndex)}
       className={`border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors group ${focusedCol !== null ? 'relative z-40' : 'relative z-10'}`}
     >
@@ -218,7 +217,9 @@ export default function EquestrianApp() {
   const [isCopied, setIsCopied] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
-  // カスタム右クリックメニューの状態管理
+  // タブの横スクロール用Ref
+  const tabContainerRef = useRef<HTMLDivElement>(null);
+
   const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; rowIndex: number | null }>({
     visible: false, x: 0, y: 0, rowIndex: null
   });
@@ -244,7 +245,6 @@ export default function EquestrianApp() {
     }
   }, [tabs, activeTabId, tournamentName, isLoaded]);
 
-  // 画面のどこかをクリックしたらコンテキストメニューを閉じる
   useEffect(() => {
     const handleClickOutside = () => setContextMenu((prev) => ({ ...prev, visible: false }));
     window.addEventListener("click", handleClickOutside);
@@ -257,7 +257,10 @@ export default function EquestrianApp() {
     const newTab = { id: crypto.randomUUID(), name: `新競技 ${tabs.length + 1}`, rows: createEmptyRows(100) };
     setTabs([...tabs, newTab]);
     setActiveTabId(newTab.id);
+    // 新しいタブを追加したら右端までスクロールさせる
+    setTimeout(() => scrollTabs('right'), 100);
   };
+
   const updateTabName = (id: string, name: string) => setTabs(tabs.map(t => t.id === id ? { ...t, name } : t));
   const deleteTab = (id: string) => {
     if (tabs.length === 1) return alert("最後のタブは削除できません");
@@ -274,6 +277,7 @@ export default function EquestrianApp() {
     a.download = `${tournamentName || "Order-list"}-settings.json`;
     a.click();
   };
+
   const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -293,11 +297,30 @@ export default function EquestrianApp() {
   };
 
   const clearAllData = () => {
-    if (window.confirm("全てのデータを削除し、初期状態に戻します。\n※保存（エクスポート）していないデータは完全に失われます。\n\n本当によろしいですか？")) {
+    if (window.confirm("全てのタブのデータを削除し、初期状態に戻します。\n本当によろしいですか？")) {
       const initialTab = { id: crypto.randomUUID(), name: "第1競技", rows: createEmptyRows(100) };
       setTabs([initialTab]);
       setActiveTabId(initialTab.id);
       setTournamentName("");
+    }
+  };
+
+  // ――― 現在のタブデータのみクリア ―――
+  const clearCurrentTab = () => {
+    if (!activeTab) return;
+    if (window.confirm(`「${activeTab.name}」のデータをすべて消去し、空行に戻します。\n本当によろしいですか？`)) {
+      setTabs(tabs.map(t => t.id === activeTabId ? { ...t, rows: createEmptyRows(100) } : t));
+    }
+  };
+
+  // ――― タブの横スクロール操作 ―――
+  const scrollTabs = (direction: 'left' | 'right') => {
+    if (tabContainerRef.current) {
+      const scrollAmount = 300; // 1回のクリックでスクロールするピクセル数
+      tabContainerRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
     }
   };
 
@@ -337,7 +360,6 @@ export default function EquestrianApp() {
     setTabs(tabs.map(t => t.id === activeTabId ? { ...t, rows: newRows } : t));
   };
 
-  // 全体コピー（Excel用）
   const copyToClipboard = async () => {
     if (!activeTab) return;
     let lastValidRowIndex = -1;
@@ -363,7 +385,6 @@ export default function EquestrianApp() {
     }
   };
 
-  // ――― 行の右クリックハンドラー ―――
   const handleContextMenu = (e: React.MouseEvent, rowIndex: number) => {
     e.preventDefault(); 
     setContextMenu({
@@ -374,7 +395,6 @@ export default function EquestrianApp() {
     });
   };
 
-  // ――― 特定の行をコピーする処理 ―――
   const handleCopySingleRow = async () => {
     if (contextMenu.rowIndex === null || !activeTab) return;
     const targetRow = activeTab.rows[contextMenu.rowIndex];
@@ -385,28 +405,21 @@ export default function EquestrianApp() {
     } catch (err) {
       alert("コピーに失敗しました");
     }
-    
-    // アクション後にメニューを閉じる
     setContextMenu(prev => ({ ...prev, visible: false }));
   };
 
-  // ――― 上に空行を追加する処理 ―――
   const handleInsertRowAbove = () => {
     if (contextMenu.rowIndex === null || !activeTab) return;
     
-    // 完全に新しい空の行データを作成
     const newEmptyRow = { 
       id: crypto.randomUUID(), 
       values: Array(7).fill("") 
     };
     
     const newRows = [...activeTab.rows];
-    // spliceを使って指定したインデックスに新しい行を挿入（元の要素は下にずれる）
     newRows.splice(contextMenu.rowIndex, 0, newEmptyRow);
     
     setTabs(tabs.map(t => t.id === activeTabId ? { ...t, rows: newRows } : t));
-    
-    // アクション後にメニューを閉じる
     setContextMenu(prev => ({ ...prev, visible: false }));
   };
 
@@ -488,7 +501,7 @@ export default function EquestrianApp() {
 
   return (
     <div className="min-h-screen bg-slate-100 py-10 font-sans text-slate-800">
-      <div className="mx-auto w-[70%] min-w-[850px]">
+      <div className="mx-auto w-[70%] min-w-[900px]">
         
         {/* ヘッダー＆コントロール */}
         <div className="flex justify-between items-end mb-8 bg-white p-6 rounded-xl shadow-sm border border-slate-200">
@@ -510,7 +523,7 @@ export default function EquestrianApp() {
           
           <div className="flex gap-3">
             <button onClick={clearAllData} className="flex items-center gap-2 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-sm">
-              <Trash2 size={16} /> データクリア
+              <Trash2 size={16} /> 全データクリア
             </button>
             <button onClick={exportData} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm">
               <Download size={16} /> 保存 (エクスポート)
@@ -524,36 +537,69 @@ export default function EquestrianApp() {
 
         {/* タブ領域と右側のアクションボタン */}
         <div className="flex justify-between items-end px-2 mb-0">
-          <div className="flex overflow-x-auto overflow-y-hidden mr-4" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-            <div className="flex gap-1">
-              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
-                <SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
-                  {tabs.map((tab) => (
-                    <SortableTab
-                      key={tab.id}
-                      tab={tab}
-                      isActive={activeTabId === tab.id}
-                      onSelect={setActiveTabId}
-                      onUpdateName={updateTabName}
-                      onDelete={deleteTab}
-                    />
-                  ))}
-                </SortableContext>
-              </DndContext>
+          
+          {/* 左側：横スクロール対応のタブリスト（スクロールボタン付き） */}
+          <div className="flex items-center mr-4 min-w-0" style={{ flex: '1 1 auto' }}>
+            <button 
+              onClick={() => scrollTabs('left')} 
+              className="p-2 mb-1 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-l-lg transition-colors shrink-0"
+              title="左へスクロール"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            
+            <div 
+              ref={tabContainerRef} 
+              className="flex overflow-x-auto overflow-y-hidden scroll-smooth" 
+              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+            >
+              <div className="flex gap-1 px-1">
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
+                  <SortableContext items={tabs.map(t => t.id)} strategy={horizontalListSortingStrategy}>
+                    {tabs.map((tab) => (
+                      <SortableTab
+                        key={tab.id}
+                        tab={tab}
+                        isActive={activeTabId === tab.id}
+                        onSelect={setActiveTabId}
+                        onUpdateName={updateTabName}
+                        onDelete={deleteTab}
+                      />
+                    ))}
+                  </SortableContext>
+                </DndContext>
+              </div>
             </div>
+
+            <button 
+              onClick={() => scrollTabs('right')} 
+              className="p-2 mb-1 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-r-lg transition-colors shrink-0"
+              title="右へスクロール"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
           
+          {/* 右側：固定アクションボタン群 */}
           <div className="flex items-center gap-1.5 shrink-0">
             <button 
               onClick={addTab} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-lg transition-colors text-sm font-medium"
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-lg transition-colors text-sm font-medium"
             >
               <Plus size={16} /> タブ追加
             </button>
             
             <button 
+              onClick={clearCurrentTab} 
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-lg transition-colors text-sm font-medium"
+              title="現在のタブのデータを空行にリセットします"
+            >
+              <Eraser size={16} /> タブ消去
+            </button>
+
+            <button 
               onClick={copyToClipboard} 
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-t-lg transition-colors text-sm font-medium shadow-sm ${
+              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-t-lg transition-colors text-sm font-medium shadow-sm ${
                 isCopied 
                   ? 'bg-emerald-500 text-white' 
                   : 'bg-white border border-slate-200 border-b-0 text-slate-700 hover:bg-slate-50'
@@ -565,7 +611,7 @@ export default function EquestrianApp() {
             
             <button 
               onClick={renumberOrder} 
-              className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white hover:bg-slate-700 rounded-t-lg transition-colors text-sm font-medium shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 text-white hover:bg-slate-700 rounded-t-lg transition-colors text-sm font-medium shadow-sm"
               title="出番を1番から順に振り直します"
             >
               <ListOrdered size={16} /> 出番振り直し
@@ -626,7 +672,6 @@ export default function EquestrianApp() {
           >
             <Copy size={16} /> この行をコピー
           </button>
-          {/* 追加したボタン */}
           <button
             onClick={handleInsertRowAbove}
             className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
