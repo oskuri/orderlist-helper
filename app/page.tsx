@@ -1,10 +1,14 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, ArrowUpToLine, Eraser, ChevronLeft, ChevronRight, AlertTriangle, Info, Search, ExternalLink, X } from "lucide-react";
+import { 
+  Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, 
+  ArrowUpToLine, Eraser, ChevronLeft, ChevronRight, AlertTriangle, Info, Search, 
+  ExternalLink, X, Clock, FileSpreadsheet, SlidersHorizontal, CheckCircle2 
+} from "lucide-react";
 
 // ――― 定数・型定義 ―――
 const COLUMNS = [
@@ -17,37 +21,32 @@ const COLUMNS = [
   { name: "所属", width: "w-72" },
 ];
 
-// 高コントラストな交差カラーパレット（暖色 → 寒色 → 明るい暖色 → 濃い寒色を交互に配置して一目で判別しやすく最適化）
+// 高コントラスト交差カラーパレット（暖色・寒色が交互に配置され違いが分かりやすい）
 const COLOR_PALETTE = [
-  "bg-sky-100",     // 淡いスカイブルー（寒色）
-  "bg-rose-100",    // 淡いローズ・赤系（暖色）
-  "bg-amber-100",   // 山吹色・アンバー（暖色）
-  "bg-indigo-100",  // 落ち着いたインディゴ（深寒色）
-  "bg-emerald-100", // エメラルドグリーン（中性・寒色系）
-  "bg-orange-100",  // 明るいオレンジ（鮮やか暖色）
-  "bg-purple-100",  // パープル（紫）
-  "bg-lime-100",    // ライムグリーン（明黄緑）
-  "bg-cyan-100",    // シアン（鮮やか青緑）
-  "bg-fuchsia-100", // フューシャピンク（鮮やかピンク）
-  "bg-yellow-100",  // イエロー
-  "bg-blue-100",    // ブルー
-  "bg-teal-100",    // ティール
-  "bg-pink-100",    // ピンク
-  "bg-sky-200",     // スカイブルー（濃）
-  "bg-rose-200",    // ローズ（濃）
-  "bg-amber-200",   // アンバー（濃）
-  "bg-purple-200",  // パープル（濃）
-  "bg-emerald-200", // エメラルド（濃）
-  "bg-orange-200",  // オレンジ（濃）
-  "bg-indigo-200",  // インディゴ（濃）
-  "bg-yellow-200",  // イエロー（濃）
-  "bg-teal-200",    // ティール（濃）
-  "bg-pink-200"     // ピンク（濃）
+  "bg-sky-100 border-sky-300 text-sky-900",
+  "bg-rose-100 border-rose-300 text-rose-900",
+  "bg-amber-100 border-amber-300 text-amber-900",
+  "bg-indigo-100 border-indigo-300 text-indigo-900",
+  "bg-emerald-100 border-emerald-300 text-emerald-900",
+  "bg-orange-100 border-orange-300 text-orange-900",
+  "bg-purple-100 border-purple-300 text-purple-900",
+  "bg-lime-100 border-lime-300 text-lime-900",
+  "bg-cyan-100 border-cyan-300 text-cyan-900",
+  "bg-fuchsia-100 border-fuchsia-300 text-fuchsia-900",
+  "bg-yellow-100 border-yellow-300 text-yellow-900",
+  "bg-blue-100 border-blue-300 text-blue-900",
+  "bg-teal-100 border-teal-300 text-teal-900",
+  "bg-pink-100 border-pink-300 text-pink-900",
 ];
 
 type RowData = { id: string; values: string[] };
 type TabData = { id: string; name: string; rows: RowData[] };
 type SearchResult = { tabId: string; tabName: string; rowIndex: number; row: RowData };
+
+type IntervalWarning = {
+  riderWarning?: { minGap: number; targetName: string };
+  horseWarning?: { minGap: number; targetName: string };
+};
 
 const createEmptyRows = (count: number): RowData[] =>
   Array.from({ length: count }, () => ({
@@ -74,7 +73,7 @@ const HighlightMatch = ({ text, query }: { text: string; query: string }) => {
   );
 };
 
-// ――― タブコンポーネント（ドラッグ＆ドロップ対応） ―――
+// ――― タブコンポーネント ―――
 const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: tab.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -114,14 +113,16 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
   );
 };
 
-// ――― 行コンポーネント（ドラッグ＆ドロップ対応） ―――
-const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, suggestions, onContextMenu }: any) => {
+// ――― 行コンポーネント ―――
+const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, intervalWarnings, suggestions, onContextMenu }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   
   const [focusedCol, setFocusedCol] = useState<number | null>(null);
   const [activeSuggestionIndex, setActiveSuggestionIndex] = useState<number>(-1);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const rowWarning = intervalWarnings[rowIndex] as IntervalWarning | undefined;
 
   useEffect(() => {
     if (dropdownRef.current && activeSuggestionIndex >= 0) {
@@ -147,7 +148,7 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
       ref={setNodeRef} 
       style={style} 
       onContextMenu={(e) => onContextMenu(e, rowIndex)}
-      className={`border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors group ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
+      className={`border-b border-slate-100 bg-white hover:bg-slate-50/80 transition-colors group ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
     >
       <td className="p-0 text-center">
         <button {...attributes} {...listeners} className="cursor-grab text-slate-300 hover:text-slate-500 opacity-50 group-hover:opacity-100 transition-opacity p-1">
@@ -155,9 +156,13 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
         </button>
       </td>
       {row.values.map((val: string, colIndex: number) => {
-        let bgColor = "bg-transparent";
-        if (colIndex === 2 && duplicateColors.rider[val]) bgColor = duplicateColors.rider[val];
-        if (colIndex === 4 && duplicateColors.horse[val]) bgColor = duplicateColors.horse[val];
+        let styleColor = "bg-transparent";
+        if (colIndex === 2 && duplicateColors.rider[val]) styleColor = duplicateColors.rider[val];
+        if (colIndex === 4 && duplicateColors.horse[val]) styleColor = duplicateColors.horse[val];
+
+        const isRiderWarning = colIndex === 2 && rowWarning?.riderWarning;
+        const isHorseWarning = colIndex === 4 && rowWarning?.horseWarning;
+        const warningInfo = isRiderWarning ? rowWarning?.riderWarning : isHorseWarning ? rowWarning?.horseWarning : null;
 
         const colSuggestions = (colIndex === 2 ? suggestions.riders : colIndex === 4 ? suggestions.horses : colIndex === 6 ? suggestions.affiliations : []);
         
@@ -166,43 +171,56 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
           : [];
 
         return (
-          <td key={colIndex} className={`p-0 relative ${bgColor}`}>
-            <input
-              type="text"
-              value={val}
-              onFocus={() => {
-                setFocusedCol(colIndex);
-                setActiveSuggestionIndex(-1);
-              }}
-              onBlur={() => {
-                setFocusedCol(null);
-                setActiveSuggestionIndex(-1);
-              }}
-              onChange={(e) => {
-                updateCell(rowIndex, colIndex, e.target.value);
-                setActiveSuggestionIndex(-1);
-              }}
-              onKeyDown={(e) => {
-                if (focusedCol === colIndex && filteredSuggestions.length > 0) {
-                  if (e.key === "ArrowDown") {
-                    e.preventDefault();
-                    setActiveSuggestionIndex((prev) => Math.min(prev + 1, filteredSuggestions.length - 1));
-                  } else if (e.key === "ArrowUp") {
-                    e.preventDefault();
-                    setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
-                  } else if (e.key === "Enter") {
-                    if (activeSuggestionIndex >= 0 && activeSuggestionIndex < filteredSuggestions.length) {
+          <td key={colIndex} className={`p-0 relative ${styleColor}`}>
+            <div className="flex items-center w-full h-full relative">
+              <input
+                type="text"
+                value={val}
+                onFocus={() => {
+                  setFocusedCol(colIndex);
+                  setActiveSuggestionIndex(-1);
+                }}
+                onBlur={() => {
+                  setFocusedCol(null);
+                  setActiveSuggestionIndex(-1);
+                }}
+                onChange={(e) => {
+                  updateCell(rowIndex, colIndex, e.target.value);
+                  setActiveSuggestionIndex(-1);
+                }}
+                onKeyDown={(e) => {
+                  if (focusedCol === colIndex && filteredSuggestions.length > 0) {
+                    if (e.key === "ArrowDown") {
                       e.preventDefault();
-                      updateCell(rowIndex, colIndex, filteredSuggestions[activeSuggestionIndex]);
-                      setFocusedCol(null);
+                      setActiveSuggestionIndex((prev) => Math.min(prev + 1, filteredSuggestions.length - 1));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setActiveSuggestionIndex((prev) => Math.max(prev - 1, 0));
+                    } else if (e.key === "Enter") {
+                      if (activeSuggestionIndex >= 0 && activeSuggestionIndex < filteredSuggestions.length) {
+                        e.preventDefault();
+                        updateCell(rowIndex, colIndex, filteredSuggestions[activeSuggestionIndex]);
+                        setFocusedCol(null);
+                      }
                     }
                   }
-                }
-              }}
-              onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-              className="w-full h-full px-2 py-1 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-xs sm:text-sm"
-              autoComplete="off"
-            />
+                }}
+                onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
+                className="w-full h-full px-2 py-1 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-xs sm:text-sm"
+                autoComplete="off"
+              />
+
+              {/* 連投・近接出番警告バッジ */}
+              {warningInfo && (
+                <div 
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow shrink-0"
+                  title={`近接出番警告: 前後の出番との間隔が${warningInfo.minGap}出番しかありません！`}
+                >
+                  <AlertTriangle size={10} />
+                  <span>間隔 {warningInfo.minGap}</span>
+                </div>
+              )}
+            </div>
             
             {focusedCol === colIndex && filteredSuggestions.length > 0 && (
               <div ref={dropdownRef} className="absolute top-full left-0 w-full mt-0.5 bg-white border border-emerald-200 shadow-xl z-50 max-h-40 overflow-y-auto rounded-md flex flex-col overflow-hidden">
@@ -218,7 +236,7 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
                         setFocusedCol(null);
                       }}
                       className={`px-3 py-1.5 text-xs sm:text-sm cursor-pointer border-b border-slate-50 last:border-none transition-colors ${
-                        isActive ? "bg-emerald-50 text-emerald-800" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+                        isActive ? "bg-emerald-50 text-emerald-800 font-medium" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
                       }`}
                     >
                       <HighlightMatch text={suggestion} query={val} />
@@ -245,7 +263,11 @@ export default function EquestrianApp() {
   
   const tabContainerRef = useRef<HTMLDivElement>(null);
 
-  // 検索機能のステート
+  // 出番間隔閾値（連投判定基準）
+  const [minIntervalThreshold, setMinIntervalThreshold] = useState<number>(5);
+  const [isAnalyzerOpen, setIsAnalyzerOpen] = useState<boolean>(false);
+
+  // 全体検索機能ステート
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
   const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
@@ -256,7 +278,7 @@ export default function EquestrianApp() {
     visible: false, x: 0, y: 0, rowIndex: null
   });
 
-  // カスタムモーダル（アラート＆確認用）の状態管理
+  // カスタムモーダル
   const [modal, setModal] = useState<{
     isOpen: boolean;
     title: string;
@@ -268,12 +290,17 @@ export default function EquestrianApp() {
   }>({ isOpen: false, title: "", message: "", type: "alert" });
 
   useEffect(() => {
-    const saved = localStorage.getItem("equestrian-data");
+    const saved = localStorage.getItem("equestrian-data-v3");
     if (saved) {
-      const parsed = JSON.parse(saved);
-      setTabs(parsed.tabs || []);
-      setActiveTabId(parsed.activeTabId || "");
-      setTournamentName(parsed.tournamentName || "");
+      try {
+        const parsed = JSON.parse(saved);
+        setTabs(parsed.tabs || []);
+        setActiveTabId(parsed.activeTabId || "");
+        setTournamentName(parsed.tournamentName || "");
+        if (parsed.minIntervalThreshold !== undefined) setMinIntervalThreshold(parsed.minIntervalThreshold);
+      } catch (e) {
+        console.error(e);
+      }
     } else {
       const initialTab = { id: crypto.randomUUID(), name: "第1競技", rows: createEmptyRows(100) };
       setTabs([initialTab]);
@@ -284,9 +311,11 @@ export default function EquestrianApp() {
 
   useEffect(() => {
     if (isLoaded) {
-      localStorage.setItem("equestrian-data", JSON.stringify({ tabs, activeTabId, tournamentName }));
+      localStorage.setItem("equestrian-data-v3", JSON.stringify({ 
+        tabs, activeTabId, tournamentName, minIntervalThreshold 
+      }));
     }
-  }, [tabs, activeTabId, tournamentName, isLoaded]);
+  }, [tabs, activeTabId, tournamentName, minIntervalThreshold, isLoaded]);
 
   useEffect(() => {
     const handleClickOutside = () => setContextMenu((prev) => ({ ...prev, visible: false }));
@@ -294,7 +323,6 @@ export default function EquestrianApp() {
     return () => window.removeEventListener("click", handleClickOutside);
   }, []);
 
-  // モーダルヘルパー
   const closeModal = () => setModal((prev) => ({ ...prev, isOpen: false }));
 
   const showAlert = (title: string, message: string) => {
@@ -322,7 +350,7 @@ export default function EquestrianApp() {
       return;
     }
     showConfirm(
-      "タブの削除",
+      "タブの削除確認",
       `「${name}」を削除しますか？\nこのタブのデータは完全に失われます。`,
       "削除する", "bg-red-600 hover:bg-red-700",
       () => {
@@ -333,13 +361,35 @@ export default function EquestrianApp() {
     );
   };
 
-  const exportData = () => {
-    const dataObj = { tabs, activeTabId, tournamentName };
+  const exportJSON = () => {
+    const dataObj = { tabs, activeTabId, tournamentName, minIntervalThreshold };
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(dataObj));
     const a = document.createElement("a");
     a.href = dataStr;
     a.download = `${tournamentName || "Order-list"}-settings.json`;
     a.click();
+  };
+
+  const exportCSV = () => {
+    let csvContent = "\uFEFF競技名,OP,出番,選手名,会員番号,馬名,登録番号,所属\n";
+    tabs.forEach((tab) => {
+      tab.rows.forEach((row) => {
+        const hasData = row.values.some((v) => v.trim() !== "");
+        if (hasData) {
+          const rowStr = [tab.name, ...row.values].map((v) => `"${v.replace(/"/g, '""')}"`).join(",");
+          csvContent += rowStr + "\n";
+        }
+      });
+    });
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${tournamentName || "大会出番表"}_一括データ.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const importData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -362,7 +412,7 @@ export default function EquestrianApp() {
 
   const requestClearAllData = () => {
     showConfirm(
-      "全データのクリア",
+      "全データのクリア確認",
       "全てのタブのデータを削除し、初期状態に戻します。\n本当によろしいですか？",
       "全データ消去", "bg-red-600 hover:bg-red-700",
       () => {
@@ -377,7 +427,7 @@ export default function EquestrianApp() {
   const requestClearCurrentTab = () => {
     if (!activeTab) return;
     showConfirm(
-      "タブデータの消去",
+      "タブデータの消去確認",
       `「${activeTab.name}」のデータをすべて消去し、空行に戻します。\n本当によろしいですか？`,
       "データを消去", "bg-red-600 hover:bg-red-700",
       () => {
@@ -489,31 +539,22 @@ export default function EquestrianApp() {
 
   const handleInsertRowAbove = () => {
     if (contextMenu.rowIndex === null || !activeTab) return;
-
-    const newEmptyRow = {
-      id: crypto.randomUUID(),
-      values: Array(7).fill("")
-    };
-
+    const newEmptyRow = { id: crypto.randomUUID(), values: Array(7).fill("") };
     const newRows = [...activeTab.rows];
     newRows.splice(contextMenu.rowIndex, 0, newEmptyRow);
-
     setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, rows: newRows } : t)));
     setContextMenu((prev) => ({ ...prev, visible: false }));
   };
 
   const handleDeleteSingleRow = () => {
     if (contextMenu.rowIndex === null || !activeTab) return;
-
     const newRows = activeTab.rows.filter((_, idx) => idx !== contextMenu.rowIndex);
     setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, rows: newRows } : t)));
     setContextMenu((prev) => ({ ...prev, visible: false }));
   };
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 5 }
-    }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
@@ -536,14 +577,17 @@ export default function EquestrianApp() {
     }
   };
 
-  const getDuplicateColors = useCallback(() => {
-    if (!activeTab) return { rider: {}, horse: {} };
+  // 1. 単一タブ内限定の重複マーク ＆ 2. 近接出番（連投）警告ロジック
+  const { duplicateColors, intervalWarnings, tournamentAnalytics } = useMemo(() => {
+    if (!activeTab) return { duplicateColors: { rider: {}, horse: {} }, intervalWarnings: {}, tournamentAnalytics: [] };
+
+    // --- 単一タブ内での重複マーク計算 ---
     const riderCounts: Record<string, number> = {};
     const horseCounts: Record<string, number> = {};
 
     activeTab.rows.forEach((r) => {
-      const rider = r.values[2];
-      const horse = r.values[4];
+      const rider = r.values[2].trim();
+      const horse = r.values[4].trim();
       if (rider) riderCounts[rider] = (riderCounts[rider] || 0) + 1;
       if (horse) horseCounts[horse] = (horseCounts[horse] || 0) + 1;
     });
@@ -559,8 +603,72 @@ export default function EquestrianApp() {
       if (horseCounts[k] > 1) horseColors[k] = COLOR_PALETTE[(colorIdx++) % COLOR_PALETTE.length];
     });
 
-    return { rider: riderColors, horse: horseColors };
-  }, [activeTab]);
+    // --- 連投・出番間隔警告計算 ---
+    const warnings: Record<number, IntervalWarning> = {};
+    const riderLastSeenIdx: Record<string, number> = {};
+    const horseLastSeenIdx: Record<string, number> = {};
+
+    activeTab.rows.forEach((r, idx) => {
+      const rider = r.values[2].trim();
+      const horse = r.values[4].trim();
+
+      if (rider) {
+        if (riderLastSeenIdx[rider] !== undefined) {
+          const gap = idx - riderLastSeenIdx[rider];
+          if (gap <= minIntervalThreshold) {
+            warnings[idx] = { ...(warnings[idx] || {}), riderWarning: { minGap: gap, targetName: rider } };
+            const prevIdx = riderLastSeenIdx[rider];
+            warnings[prevIdx] = { ...(warnings[prevIdx] || {}), riderWarning: { minGap: gap, targetName: rider } };
+          }
+        }
+        riderLastSeenIdx[rider] = idx;
+      }
+
+      if (horse) {
+        if (horseLastSeenIdx[horse] !== undefined) {
+          const gap = idx - horseLastSeenIdx[horse];
+          if (gap <= minIntervalThreshold) {
+            warnings[idx] = { ...(warnings[idx] || {}), horseWarning: { minGap: gap, targetName: horse } };
+            const prevIdx = horseLastSeenIdx[horse];
+            warnings[prevIdx] = { ...(warnings[prevIdx] || {}), horseWarning: { minGap: gap, targetName: horse } };
+          }
+        }
+        horseLastSeenIdx[horse] = idx;
+      }
+    });
+
+    // --- 大会全体の出番間隔アナライザー用データ ---
+    const analyticsMap: Record<string, { type: "rider" | "horse"; name: string; totalEntries: number; entries: { tabName: string; order: string; index: number }[] }> = {};
+
+    tabs.forEach((tab) => {
+      tab.rows.forEach((row, rowIdx) => {
+        const rider = row.values[2].trim();
+        const horse = row.values[4].trim();
+        const orderVal = row.values[1].trim() || `${rowIdx + 1}`;
+
+        if (rider) {
+          const key = `rider_${rider}`;
+          if (!analyticsMap[key]) analyticsMap[key] = { type: "rider", name: rider, totalEntries: 0, entries: [] };
+          analyticsMap[key].totalEntries++;
+          analyticsMap[key].entries.push({ tabName: tab.name, order: orderVal, index: rowIdx });
+        }
+        if (horse) {
+          const key = `horse_${horse}`;
+          if (!analyticsMap[key]) analyticsMap[key] = { type: "horse", name: horse, totalEntries: 0, entries: [] };
+          analyticsMap[key].totalEntries++;
+          analyticsMap[key].entries.push({ tabName: tab.name, order: orderVal, index: rowIdx });
+        }
+      });
+    });
+
+    const tournamentAnalytics = Object.values(analyticsMap).filter((item) => item.totalEntries > 1);
+
+    return {
+      duplicateColors: { rider: riderColors, horse: horseColors },
+      intervalWarnings: warnings,
+      tournamentAnalytics: tournamentAnalytics
+    };
+  }, [activeTab, tabs, minIntervalThreshold]);
 
   const suggestions = useMemo(() => {
     const riders = new Set<string>();
@@ -588,14 +696,12 @@ export default function EquestrianApp() {
     };
   }, [tabs]);
 
-  // 全体検索候補のフィルタリング
   const filteredSearchSuggestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
     return suggestions.all.filter((item) => item.toLowerCase().includes(query)).slice(0, 10);
   }, [searchQuery, suggestions.all]);
 
-  // 検索モーダル用の検索結果リスト
   const searchResults = useMemo<SearchResult[]>(() => {
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
@@ -605,12 +711,7 @@ export default function EquestrianApp() {
       tab.rows.forEach((row, rowIndex) => {
         const match = row.values.some((val) => val.toLowerCase().includes(query));
         if (match) {
-          results.push({
-            tabId: tab.id,
-            tabName: tab.name,
-            rowIndex: rowIndex,
-            row: row
-          });
+          results.push({ tabId: tab.id, tabName: tab.name, rowIndex: rowIndex, row: row });
         }
       });
     });
@@ -635,8 +736,6 @@ export default function EquestrianApp() {
 
   if (!isLoaded || !activeTab) return null;
 
-  const duplicateColors = getDuplicateColors();
-
   return (
     <div className="h-screen bg-slate-100 p-2 sm:p-3 font-sans text-slate-800 flex flex-col overflow-hidden">
       <div className="w-full max-w-[98%] xl:max-w-7xl mx-auto h-full flex flex-col min-h-0">
@@ -659,12 +758,12 @@ export default function EquestrianApp() {
             />
           </div>
 
-          {/* 検索入力ウィンドウ */}
-          <div className="relative min-w-[200px] sm:min-w-[260px] flex-1 max-w-sm">
+          {/* 検索ウィンドウ */}
+          <div className="relative min-w-[180px] sm:min-w-[240px] flex-1 max-w-xs">
             <div className="relative flex items-center">
               <input
                 type="text"
-                placeholder="全シートから検索 (選手, 馬名, 所属...)"
+                placeholder="全シート検索 (選手/馬名/所属)"
                 value={searchQuery}
                 onFocus={() => setIsSearchFocused(true)}
                 onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
@@ -696,25 +795,24 @@ export default function EquestrianApp() {
                     handleExecuteSearch();
                   }
                 }}
-                className="w-full pl-8 pr-16 py-1 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-slate-50 focus:bg-white transition-all"
+                className="w-full pl-8 pr-14 py-1 text-xs border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-slate-50 focus:bg-white transition-all"
               />
               <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
               <button
                 onClick={() => handleExecuteSearch()}
-                className="absolute right-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors"
+                className="absolute right-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium rounded transition-colors"
               >
                 検索
               </button>
             </div>
 
-            {/* 検索結果候補ドロップダウン */}
             {isSearchFocused && filteredSearchSuggestions.length > 0 && (
               <div
                 ref={searchDropdownRef}
                 className="absolute top-full left-0 w-full mt-1 bg-white border border-emerald-200 shadow-2xl z-50 max-h-52 overflow-y-auto rounded-lg flex flex-col"
               >
-                <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 bg-slate-50 border-b border-slate-100">
-                  入力候補 (エンターで検索)
+                <div className="px-2.5 py-1 text-[10px] font-semibold text-slate-400 bg-slate-50 border-b border-slate-100">
+                  候補一覧 (Enterで検索)
                 </div>
                 {filteredSearchSuggestions.map((suggestion, i) => {
                   const isActive = i === activeSearchSuggestionIndex;
@@ -740,21 +838,39 @@ export default function EquestrianApp() {
           </div>
           
           <div className="flex items-center gap-1.5 shrink-0">
-            <button onClick={requestClearAllData} className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-2.5 py-1 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-xs">
-              <Trash2 size={13} /> 全クリア
+            {/* 出番間隔・アナライザーボタン */}
+            <button
+              onClick={() => setIsAnalyzerOpen(true)}
+              className="flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-1 rounded-lg hover:bg-amber-100 transition-colors shadow-sm font-semibold text-xs"
+              title="大会全体の重複出番・出番間隔の分析画面を開く"
+            >
+              <Clock size={13} className="text-amber-600" />
+              <span>出番間隔分析</span>
+              {tournamentAnalytics.length > 0 && (
+                <span className="bg-amber-500 text-white text-[10px] px-1.5 rounded-full font-bold ml-0.5">
+                  {tournamentAnalytics.length}
+                </span>
+              )}
             </button>
-            <button onClick={exportData} className="flex items-center gap-1 bg-white border border-slate-300 text-slate-700 px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs">
+
+            <button onClick={exportCSV} className="flex items-center gap-1 bg-white border border-slate-300 text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs" title="Excelで開けるCSVファイルを出力">
+              <FileSpreadsheet size={13} className="text-emerald-600" /> CSV
+            </button>
+            <button onClick={exportJSON} className="flex items-center gap-1 bg-white border border-slate-300 text-slate-700 px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs" title="設定保存 (JSON)">
               <Download size={13} /> 保存
             </button>
             <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium text-xs">
               <Upload size={13} /> 読込
             </button>
             <input type="file" accept=".json" ref={fileInputRef} onChange={importData} className="hidden" />
+            <button onClick={requestClearAllData} className="p-1 bg-white border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors shadow-sm" title="全データ初期化">
+              <Trash2 size={13} />
+            </button>
           </div>
         </div>
 
         {/* タブ領域と右側のアクションボタン */}
-        <div className="flex justify-between items-end px-1 mb-0 shrink-0">
+        <div className="flex justify-between items-end px-1 mb-0 shrink-0 mt-1">
           <div className="flex items-center mr-3 min-w-0" style={{ flex: "1 1 auto" }}>
             <button 
               onClick={() => scrollTabs("left")} 
@@ -807,7 +923,7 @@ export default function EquestrianApp() {
             <button 
               onClick={requestClearCurrentTab} 
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-md transition-colors text-xs font-medium"
-              title="現在のタブのデータを空行にリセットします"
+              title="現在のタブのデータを空行にリセット"
             >
               <Eraser size={13} /> タブ消去
             </button>
@@ -827,7 +943,7 @@ export default function EquestrianApp() {
             <button 
               onClick={renumberOrder} 
               className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 text-white hover:bg-slate-700 rounded-t-md transition-colors text-xs font-medium shadow-sm"
-              title="出番を1番から順に振り直します"
+              title="出番を1番から順に振り直し"
             >
               <ListOrdered size={13} /> 出番振り直し
             </button>
@@ -862,6 +978,7 @@ export default function EquestrianApp() {
                       updateCell={updateCell}
                       handlePaste={handlePaste}
                       duplicateColors={duplicateColors}
+                      intervalWarnings={intervalWarnings}
                       suggestions={suggestions}
                       onContextMenu={handleContextMenu}
                     />
@@ -906,35 +1023,114 @@ export default function EquestrianApp() {
         </div>
       )}
 
-      {/* 全体検索結果モーダル */}
-      {isSearchModalOpen && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
-            {/* モーダルヘッダー */}
+      {/* 出番間隔分析モーダル */}
+      {isAnalyzerOpen && (
+        <div className="fixed inset-0 z-[110] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
             <div className="px-5 py-3.5 bg-slate-800 text-white flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <Search size={18} className="text-emerald-400" />
-                <h3 className="text-base font-bold">
-                  検索結果一覧
-                </h3>
-                <span className="text-xs bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full ml-2">
-                  キーワード: 「<span className="text-emerald-300 font-semibold">{searchQuery}</span>」 ({searchResults.length}件該当)
-                </span>
+                <Clock size={18} className="text-amber-400" />
+                <h3 className="text-base font-bold">出番間隔・複数エントリー分析</h3>
               </div>
-              <button
-                onClick={() => setIsSearchModalOpen(false)}
-                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
-              >
+              <button onClick={() => setIsAnalyzerOpen(false)} className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg">
                 <X size={18} />
               </button>
             </div>
 
-            {/* モーダル本文（結果テーブル） */}
+            {/* モーダル内ヘッダー：連投警告の閾値設定 */}
+            <div className="bg-amber-50/80 px-5 py-2.5 border-b border-amber-200/60 flex items-center justify-between text-xs text-amber-900 shrink-0">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={14} className="text-amber-700 shrink-0" />
+                <span className="font-semibold">連投・近接判定の間隔閾値:</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <select
+                  value={minIntervalThreshold}
+                  onChange={(e) => setMinIntervalThreshold(Number(e.target.value))}
+                  className="bg-white border border-amber-300 rounded px-2 py-1 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 shadow-sm"
+                >
+                  <option value={2}>2 出番以下（直後）</option>
+                  <option value={3}>3 出番以下</option>
+                  <option value={5}>5 出番以下（標準）</option>
+                  <option value={8}>8 出番以下</option>
+                  <option value={10}>10 出番以下</option>
+                </select>
+                <span className="text-slate-500 text-[11px]">※設定値以下の出番間隔に⚠️バッジが表示されます</span>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+              {tournamentAnalytics.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm flex flex-col items-center gap-2">
+                  <CheckCircle2 size={32} className="text-emerald-500 opacity-60" />
+                  <span>複数回エントリーされている選手・馬匹はありません。</span>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="text-xs text-slate-600 font-medium px-1">
+                    全競技（全タブ）を通して2回以上エントリーされている選手および馬匹の一覧です。
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {tournamentAnalytics.map((item, idx) => (
+                      <div key={idx} className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm hover:border-amber-300 transition-colors">
+                        <div className="flex items-center justify-between border-b border-slate-100 pb-2 mb-2">
+                          <div className="flex items-center gap-1.5 font-bold text-sm text-slate-800">
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${item.type === "rider" ? "bg-sky-100 text-sky-800" : "bg-emerald-100 text-emerald-800"}`}>
+                              {item.type === "rider" ? "選手" : "馬匹"}
+                            </span>
+                            <span>{item.name}</span>
+                          </div>
+                          <span className="text-xs bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full font-bold">
+                            計 {item.totalEntries} 出番
+                          </span>
+                        </div>
+                        <div className="space-y-1 text-xs">
+                          {item.entries.map((entry, eIdx) => (
+                            <div key={eIdx} className="flex items-center justify-between bg-slate-50 px-2.5 py-1 rounded text-slate-600">
+                              <span className="font-semibold text-slate-700">{entry.tabName}</span>
+                              <span className="font-mono bg-white border border-slate-200 px-1.5 py-0.5 rounded text-[11px]">
+                                出番 #{entry.order}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-2.5 bg-white border-t border-slate-200 flex justify-between items-center text-xs text-slate-500 shrink-0">
+              <span>💡 同じ競技内での重複出番はメイン画面上で自動的に色分け表示されます。</span>
+              <button onClick={() => setIsAnalyzerOpen(false)} className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors">
+                閉じる
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 全体検索結果モーダル */}
+      {isSearchModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="px-5 py-3.5 bg-slate-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Search size={18} className="text-emerald-400" />
+                <h3 className="text-base font-bold">検索結果一覧</h3>
+                <span className="text-xs bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full ml-2">
+                  キーワード: 「<span className="text-emerald-300 font-semibold">{searchQuery}</span>」 ({searchResults.length}件該当)
+                </span>
+              </div>
+              <button onClick={() => setIsSearchModalOpen(false)} className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg">
+                <X size={18} />
+              </button>
+            </div>
+
             <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
               {searchResults.length === 0 ? (
-                <div className="text-center py-12 text-slate-400 text-sm">
-                  該当するデータが見つかりませんでした。
-                </div>
+                <div className="text-center py-12 text-slate-400 text-sm">該当するデータが見つかりませんでした。</div>
               ) : (
                 <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
                   <table className="w-full border-collapse text-xs text-left">
@@ -949,7 +1145,7 @@ export default function EquestrianApp() {
                     </thead>
                     <tbody>
                       {searchResults.map((result, idx) => {
-                        // 対象競技（タブ名）を除外した純粋な行データ文字列
+                        // コピー時は対象競技名（タブ名）を除外し、7列のデータのみを出力
                         const rowCopyStr = result.row.values.join("\t");
                         return (
                           <tr
@@ -969,7 +1165,6 @@ export default function EquestrianApp() {
                               <button
                                 onClick={() => handleJumpToTab(result.tabId)}
                                 className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-[11px] transition-colors shadow-sm"
-                                title="このタブに切り替えます"
                               >
                                 <ExternalLink size={12} /> 移動
                               </button>
@@ -983,13 +1178,9 @@ export default function EquestrianApp() {
               )}
             </div>
 
-            {/* モーダルフッター */}
             <div className="px-5 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
-              <div>💡 検索結果の行を右クリックすると、その行のデータをコピーできます。</div>
-              <button
-                onClick={() => setIsSearchModalOpen(false)}
-                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors"
-              >
+              <div>💡 検索結果の行を右クリックすると、その行のデータ（競技名を除く7項目）をコピーできます。</div>
+              <button onClick={() => setIsSearchModalOpen(false)} className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors">
                 閉じる
               </button>
             </div>
@@ -997,7 +1188,7 @@ export default function EquestrianApp() {
         </div>
       )}
 
-      {/* カスタム モーダル (アラート＆確認ポップアップ) */}
+      {/* カスタム モーダル */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
