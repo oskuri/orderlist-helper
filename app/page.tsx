@@ -502,6 +502,14 @@ export default function EquestrianApp() {
     setContextMenu((prev) => ({ ...prev, visible: false }));
   };
 
+  const handleDeleteSingleRow = () => {
+    if (contextMenu.rowIndex === null || !activeTab) return;
+
+    const newRows = activeTab.rows.filter((_, idx) => idx !== contextMenu.rowIndex);
+    setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, rows: newRows } : t)));
+    setContextMenu((prev) => ({ ...prev, visible: false }));
+  };
+
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: { distance: 5 }
@@ -880,12 +888,20 @@ export default function EquestrianApp() {
             <Copy size={13} /> この行をコピー
           </button>
           {contextMenu.customText === undefined && (
-            <button
-              onClick={handleInsertRowAbove}
-              className="w-full text-left px-3.5 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
-            >
-              <ArrowUpToLine size={13} /> 上に空行を追加
-            </button>
+            <>
+              <button
+                onClick={handleInsertRowAbove}
+                className="w-full text-left px-3.5 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
+              >
+                <ArrowUpToLine size={13} /> 上に空行を追加
+              </button>
+              <button
+                onClick={handleDeleteSingleRow}
+                className="w-full text-left px-3.5 py-1.5 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
+              >
+                <Trash2 size={13} /> この行を削除
+              </button>
+            </>
           )}
         </div>
       )}
@@ -933,7 +949,8 @@ export default function EquestrianApp() {
                     </thead>
                     <tbody>
                       {searchResults.map((result, idx) => {
-                        const rowCopyStr = `${result.tabName}\t${result.row.values.join("\t")}`;
+                        // 対象競技（タブ名）を除外した純粋な行データ文字列
+                        const rowCopyStr = result.row.values.join("\t");
                         return (
                           <tr
                             key={`${result.tabId}-${result.rowIndex}-${idx}`}
