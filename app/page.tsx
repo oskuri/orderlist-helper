@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -47,6 +47,11 @@ type IntervalWarning = {
   riderWarning?: { minGap: number; targetName: string };
   horseWarning?: { minGap: number; targetName: string };
 };
+
+type HoveredMatch = {
+  type: "rider" | "horse";
+  name: string;
+} | null;
 
 const createEmptyRows = (count: number): RowData[] =>
   Array.from({ length: count }, () => ({
@@ -114,7 +119,19 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
 };
 
 // ――― 行コンポーネント ―――
-const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, intervalWarnings, suggestions, onContextMenu }: any) => {
+const SortableRow = ({ 
+  row, 
+  rowIndex, 
+  updateCell, 
+  handlePaste, 
+  duplicateColors, 
+  intervalWarnings, 
+  suggestions, 
+  onContextMenu,
+  hoveredMatch,
+  onHoverCell,
+  onLeaveCell
+}: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
   
@@ -123,6 +140,11 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const rowWarning = intervalWarnings[rowIndex] as IntervalWarning | undefined;
+
+  // ホバー中の重複強調表示の判定
+  const isRiderMatchHovered = hoveredMatch?.type === "rider" && row.values[2].trim() !== "" && row.values[2].trim() === hoveredMatch.name;
+  const isHorseMatchHovered = hoveredMatch?.type === "horse" && row.values[4].trim() !== "" && row.values[4].trim() === hoveredMatch.name;
+  const isRowMatchHovered = isRiderMatchHovered || isHorseMatchHovered;
 
   useEffect(() => {
     if (dropdownRef.current && activeSuggestionIndex >= 0) {
@@ -146,9 +168,14 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
   return (
     <tr 
       ref={setNodeRef} 
+      data-row-index={rowIndex}
       style={style} 
       onContextMenu={(e) => onContextMenu(e, rowIndex)}
-      className={`border-b border-slate-100 bg-white hover:bg-slate-50/80 transition-colors group ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
+      className={`border-b border-slate-100 transition-all duration-150 group ${
+        isRowMatchHovered
+          ? "bg-emerald-50/90 ring-2 ring-emerald-400 ring-inset z-20"
+          : "bg-white hover:bg-slate-50/80"
+      } ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
     >
       <td className="p-0 text-center">
         <button {...attributes} {...listeners} className="cursor-grab text-slate-300 hover:text-slate-500 opacity-50 group-hover:opacity-100 transition-opacity p-1">
@@ -170,8 +197,24 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
           ? colSuggestions.filter((s: string) => s !== val && s.toLowerCase().includes(val.toLowerCase())) 
           : [];
 
+        // ホバー対象セルかの個別判定
+        const isThisCellHovered = (colIndex === 2 && isRiderMatchHovered) || (colIndex === 4 && isHorseMatchHovered);
+
         return (
-          <td key={colIndex} className={`p-0 relative ${styleColor}`}>
+          <td 
+            key={colIndex} 
+            className={`p-0 relative transition-colors ${styleColor} ${isThisCellHovered ? "ring-2 ring-emerald-600 bg-emerald-100" : ""}`}
+            onMouseEnter={() => {
+              if ((colIndex === 2 || colIndex === 4) && val.trim()) {
+                onHoverCell(colIndex === 2 ? "rider" : "horse", val.trim());
+              }
+            }}
+            onMouseLeave={() => {
+              if (colIndex === 2 || colIndex === 4) {
+                onLeaveCell();
+              }
+            }}
+          >
             <div className="flex items-center w-full h-full relative">
               <input
                 type="text"
@@ -213,7 +256,7 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
               {/* 連投・近接出番警告バッジ */}
               {warningInfo && (
                 <div 
-                  className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow shrink-0"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 z-20 flex items-center gap-0.5 bg-amber-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow shrink-0 pointer-events-none"
                   title={`近接出番警告: 前後の出番との間隔が${warningInfo.minGap}出番しかありません！`}
                 >
                   <AlertTriangle size={10} />
@@ -262,10 +305,16 @@ export default function EquestrianApp() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const tabContainerRef = useRef<HTMLDivElement>(null);
+  const tableBodyRef = useRef<HTMLTableSectionElement>(null);
+  const tableWrapperRef = useRef<HTMLDivElement>(null);
 
   // 出番間隔閾値（連投判定基準）
   const [minIntervalThreshold, setMinIntervalThreshold] = useState<number>(5);
   const [isAnalyzerOpen, setIsAnalyzerOpen] = useState<boolean>(false);
+
+  // ホバー結び線（案1）用ステート
+  const [hoveredMatch, setHoveredMatch] = useState<HoveredMatch>(null);
+  const [hoverBrackets, setHoverBrackets] = useState<{ top: number; height: number; gap: number }[]>([]);
 
   // 全体検索機能ステート
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -576,6 +625,59 @@ export default function EquestrianApp() {
       setTabs(arrayMove(tabs, oldIndex, newIndex));
     }
   };
+
+  // ホバー結び線（案1）計算処理
+  const handleHoverCell = useCallback((type: "rider" | "horse", name: string) => {
+    setHoveredMatch({ type, name });
+  }, []);
+
+  const handleLeaveCell = useCallback(() => {
+    setHoveredMatch(null);
+    setHoverBrackets([]);
+  }, []);
+
+  useEffect(() => {
+    if (!hoveredMatch || !activeTab || !tableBodyRef.current) {
+      setHoverBrackets([]);
+      return;
+    }
+
+    const colIdx = hoveredMatch.type === "rider" ? 2 : 4;
+    const matchingRowIndices: number[] = [];
+
+    activeTab.rows.forEach((r, idx) => {
+      if (r.values[colIdx].trim() === hoveredMatch.name) {
+        matchingRowIndices.push(idx);
+      }
+    });
+
+    if (matchingRowIndices.length <= 1) {
+      setHoverBrackets([]);
+      return;
+    }
+
+    const rowEls = tableBodyRef.current.querySelectorAll("tr[data-row-index]");
+    const brackets: { top: number; height: number; gap: number }[] = [];
+
+    for (let i = 0; i < matchingRowIndices.length - 1; i++) {
+      const r1 = matchingRowIndices[i];
+      const r2 = matchingRowIndices[i + 1];
+
+      const el1 = rowEls[r1] as HTMLElement;
+      const el2 = rowEls[r2] as HTMLElement;
+
+      if (el1 && el2) {
+        const top1 = el1.offsetTop + el1.offsetHeight / 2;
+        const top2 = el2.offsetTop + el2.offsetHeight / 2;
+        const height = top2 - top1;
+        const gap = r2 - r1 - 1; // 間に入っている頭（出番）数
+
+        brackets.push({ top: top1, height, gap });
+      }
+    }
+
+    setHoverBrackets(brackets);
+  }, [hoveredMatch, activeTab]);
 
   // 1. 単一タブ内限定の重複マーク ＆ 2. 近接出番（連投）警告ロジック
   const { duplicateColors, intervalWarnings, tournamentAnalytics } = useMemo(() => {
@@ -951,8 +1053,8 @@ export default function EquestrianApp() {
         </div>
 
         {/* 表領域 */}
-        <div className="bg-white rounded-b-xl rounded-tl-xl shadow-lg border border-slate-200 flex-1 min-h-0 overflow-y-auto relative z-0">
-          <table className="w-full border-collapse table-fixed">
+        <div ref={tableWrapperRef} className="bg-white rounded-b-xl rounded-tl-xl shadow-lg border border-slate-200 flex-1 min-h-0 overflow-y-auto relative z-0">
+          <table className="w-full border-collapse table-fixed relative">
             <colgroup>
               <col className="w-8" />
               {COLUMNS.map((col, idx) => (
@@ -967,7 +1069,7 @@ export default function EquestrianApp() {
                 ))}
               </tr>
             </thead>
-            <tbody>
+            <tbody ref={tableBodyRef} className="relative">
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRowDragEnd}>
                 <SortableContext items={activeTab.rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                   {activeTab.rows.map((row, rowIndex) => (
@@ -981,12 +1083,34 @@ export default function EquestrianApp() {
                       intervalWarnings={intervalWarnings}
                       suggestions={suggestions}
                       onContextMenu={handleContextMenu}
+                      hoveredMatch={hoveredMatch}
+                      onHoverCell={handleHoverCell}
+                      onLeaveCell={handleLeaveCell}
                     />
                   ))}
                 </SortableContext>
               </DndContext>
             </tbody>
           </table>
+
+          {/* ホバー時カッコ（案1: HTML/CSS描画結び線） */}
+          {hoverBrackets.map((bracket, i) => (
+            <div
+              key={i}
+              className="absolute right-3 pointer-events-none z-30 flex items-center justify-end animate-in fade-in duration-150"
+              style={{
+                top: `${bracket.top}px`,
+                height: `${bracket.height}px`,
+                width: "44px",
+              }}
+            >
+              <div className="w-full h-full border-r-2 border-t-2 border-b-2 border-emerald-500 rounded-r-xl relative shadow-sm">
+                <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 bg-emerald-600 text-white text-[11px] font-bold px-2 py-0.5 rounded-full shadow-lg whitespace-nowrap flex items-center gap-1 border border-white">
+                  <span>間 {bracket.gap} 頭</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
 
       </div>
