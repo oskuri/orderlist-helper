@@ -11,19 +11,38 @@ const COLUMNS = [
   { name: "OP", width: "w-12" },
   { name: "出番", width: "w-16" },
   { name: "選手名", width: "w-48" },
-  { name: "会員番号", width: "w-20" },
+  { name: "会員番号", width: "w-24" },
   { name: "馬名", width: "w-48" },
-  { name: "登録番号", width: "w-20" },
+  { name: "登録番号", width: "w-24" },
   { name: "所属", width: "w-72" },
 ];
 
+// 高コントラストな交差カラーパレット（暖色・寒色・明暗を交互に配置して判別しやすく設定）
 const COLOR_PALETTE = [
-  "bg-red-100", "bg-orange-100", "bg-amber-100", "bg-yellow-100", 
-  "bg-lime-100", "bg-green-100", "bg-emerald-100", "bg-teal-100", 
-  "bg-cyan-100", "bg-sky-100", "bg-blue-100", "bg-indigo-100", 
-  "bg-purple-100", "bg-fuchsia-100", "bg-pink-100", "bg-rose-100",
-  "bg-red-200", "bg-yellow-200", "bg-emerald-200", "bg-blue-200", 
-  "bg-purple-200", "bg-pink-200", "bg-orange-200", "bg-teal-200"
+  "bg-sky-100",     // 淡いスカイブルー
+  "bg-rose-100",    // 淡いローズ・赤系
+  "bg-amber-100",   // 淡い山吹色・アンバー
+  "bg-indigo-100",  // 落ち着いたインディゴ
+  "bg-emerald-100", // 鮮やかなエメラルドグリーン
+  "bg-orange-100",  // 明るいオレンジ
+  "bg-purple-100",  // パープル
+  "bg-lime-100",    // ライムグリーン
+  "bg-cyan-100",    // シアン
+  "bg-fuchsia-100", // フューシャピンク
+  "bg-yellow-100",  // イエロー
+  "bg-blue-100",    // ブルー
+  "bg-teal-100",    // ティール
+  "bg-pink-100",    // ピンク
+  "bg-sky-200",     // スカイブルー（濃）
+  "bg-rose-200",    // ローズ（濃）
+  "bg-amber-200",   // アンバー（濃）
+  "bg-purple-200",  // パープル（濃）
+  "bg-emerald-200", // エメラルド（濃）
+  "bg-orange-200",  // オレンジ（濃）
+  "bg-indigo-200",  // インディゴ（濃）
+  "bg-yellow-200",  // イエロー（濃）
+  "bg-teal-200",    // ティール（濃）
+  "bg-pink-200"     // ピンク（濃）
 ];
 
 type RowData = { id: string; values: string[] };
@@ -66,9 +85,9 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
       {...attributes}
       {...listeners}
       onClick={() => onSelect(tab.id)}
-      className={`shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-t-lg cursor-grab transition-all ${
+      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-t-lg cursor-grab transition-all ${
         isActive 
-          ? "bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.05)] border-t-2 border-emerald-500 relative z-10" 
+          ? "bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.05)] border-t-2 border-emerald-500 relative z-10" 
           : "bg-slate-200 hover:bg-slate-300 text-slate-500"
       }`}
     >
@@ -78,17 +97,17 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
         onChange={(e) => onUpdateName(tab.id, e.target.value)}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className={`bg-transparent outline-none font-semibold w-24 text-sm cursor-text ${
+        className={`bg-transparent outline-none font-semibold w-20 text-xs sm:text-sm cursor-text ${
           isActive ? "text-emerald-900" : "text-slate-600"
         }`}
       />
       <button 
         onClick={(e) => { e.stopPropagation(); onDelete(tab.id, tab.name); }} 
         onPointerDown={(e) => e.stopPropagation()}
-        className="text-slate-400 hover:text-red-500 transition-colors"
+        className="text-slate-400 hover:text-red-500 transition-colors p-0.5"
         title="タブを削除"
       >
-        <Trash2 size={14} />
+        <Trash2 size={13} />
       </button>
     </div>
   );
@@ -129,9 +148,9 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
       onContextMenu={(e) => onContextMenu(e, rowIndex)}
       className={`border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors group ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
     >
-      <td className="p-1 text-center">
+      <td className="p-0.5 text-center">
         <button {...attributes} {...listeners} className="cursor-grab text-slate-300 hover:text-slate-500 opacity-50 group-hover:opacity-100 transition-opacity">
-          <GripVertical size={16} />
+          <GripVertical size={14} />
         </button>
       </td>
       {row.values.map((val: string, colIndex: number) => {
@@ -180,12 +199,12 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
                 }
               }}
               onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-              className="w-full h-full px-3 py-2.5 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-sm"
+              className="w-full h-full px-2.5 py-1.5 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-xs sm:text-sm"
               autoComplete="off"
             />
             
             {focusedCol === colIndex && filteredSuggestions.length > 0 && (
-              <div ref={dropdownRef} className="absolute top-full left-0 w-full mt-1 bg-white border border-emerald-200 shadow-xl z-50 max-h-48 overflow-y-auto rounded-md flex flex-col overflow-hidden">
+              <div ref={dropdownRef} className="absolute top-full left-0 w-full mt-0.5 bg-white border border-emerald-200 shadow-xl z-50 max-h-40 overflow-y-auto rounded-md flex flex-col overflow-hidden">
                 {filteredSuggestions.map((suggestion: string, i: number) => {
                   const isActive = i === activeSuggestionIndex;
                   return (
@@ -197,7 +216,7 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
                         updateCell(rowIndex, colIndex, suggestion);
                         setFocusedCol(null);
                       }}
-                      className={`px-3 py-2.5 text-sm cursor-pointer border-b border-slate-50 last:border-none transition-colors ${
+                      className={`px-3 py-1.5 text-xs sm:text-sm cursor-pointer border-b border-slate-50 last:border-none transition-colors ${
                         isActive ? "bg-emerald-50 text-emerald-800" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
                       }`}
                     >
@@ -545,15 +564,15 @@ export default function EquestrianApp() {
   const duplicateColors = getDuplicateColors();
 
   return (
-    <div className="h-screen bg-slate-100 p-6 font-sans text-slate-800 flex flex-col overflow-hidden">
-      <div className="mx-auto w-[70%] min-w-[900px] h-full flex flex-col">
+    <div className="h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800 flex flex-col overflow-hidden">
+      <div className="w-full max-w-[95%] xl:max-w-7xl mx-auto h-full flex flex-col min-h-0">
         
         {/* ヘッダー＆コントロール */}
-        <div className="flex justify-between items-end mb-6 bg-white p-6 rounded-xl shadow-sm border border-slate-200 shrink-0">
-          <div className="flex-1 w-full flex flex-col gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-3xl" role="img" aria-label="horse">🐴</span>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 bg-white px-4 py-3 rounded-xl shadow-sm border border-slate-200 shrink-0">
+          <div className="flex items-center gap-3 flex-1 min-w-[300px]">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="text-2xl" role="img" aria-label="horse">🐴</span>
+              <h1 className="text-lg font-bold tracking-tight text-slate-800 shrink-0">
                 Order List Helper
               </h1>
             </div>
@@ -562,33 +581,33 @@ export default function EquestrianApp() {
               placeholder="大会名を入力 (例: 第3回 〇〇馬術大会)"
               value={tournamentName}
               onChange={(e) => setTournamentName(e.target.value)}
-              className="w-3/4 text-lg font-medium text-slate-700 placeholder-slate-400 border-b-2 border-transparent hover:border-slate-200 focus:border-emerald-500 focus:outline-none py-1 bg-transparent transition-colors"
+              className="flex-1 text-sm sm:text-base font-medium text-slate-700 placeholder-slate-400 border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none py-0.5 bg-transparent transition-colors"
             />
           </div>
           
-          <div className="flex gap-3">
-            <button onClick={requestClearAllData} className="flex items-center gap-2 bg-white border border-red-200 text-red-600 px-4 py-2 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-sm">
-              <Trash2 size={16} /> 全データクリア
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={requestClearAllData} className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-xs sm:text-sm">
+              <Trash2 size={14} /> 全クリア
             </button>
-            <button onClick={exportData} className="flex items-center gap-2 bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-sm">
-              <Download size={16} /> 保存 (エクスポート)
+            <button onClick={exportData} className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs sm:text-sm">
+              <Download size={14} /> 保存 (エクスポート)
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium text-sm">
-              <Upload size={16} /> 読込 (インポート)
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium text-xs sm:text-sm">
+              <Upload size={14} /> 読込 (インポート)
             </button>
             <input type="file" accept=".json" ref={fileInputRef} onChange={importData} className="hidden" />
           </div>
         </div>
 
         {/* タブ領域と右側のアクションボタン */}
-        <div className="flex justify-between items-end px-2 mb-0 shrink-0">
-          <div className="flex items-center mr-4 min-w-0" style={{ flex: "1 1 auto" }}>
+        <div className="flex justify-between items-end px-1 mb-0 shrink-0">
+          <div className="flex items-center mr-3 min-w-0" style={{ flex: "1 1 auto" }}>
             <button 
               onClick={() => scrollTabs("left")} 
-              className="p-2 mb-1 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-l-lg transition-colors shrink-0"
+              className="p-1.5 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-l-md transition-colors shrink-0"
               title="左へスクロール"
             >
-              <ChevronLeft size={16} />
+              <ChevronLeft size={15} />
             </button>
             
             <div 
@@ -616,65 +635,65 @@ export default function EquestrianApp() {
 
             <button 
               onClick={() => scrollTabs("right")} 
-              className="p-2 mb-1 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-r-lg transition-colors shrink-0"
+              className="p-1.5 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-r-md transition-colors shrink-0"
               title="右へスクロール"
             >
-              <ChevronRight size={16} />
+              <ChevronRight size={15} />
             </button>
           </div>
           
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 shrink-0 pb-0.5">
             <button 
               onClick={addTab} 
-              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-lg transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-md transition-colors text-xs sm:text-sm font-medium"
             >
-              <Plus size={16} /> タブ追加
+              <Plus size={14} /> タブ追加
             </button>
             
             <button 
               onClick={requestClearCurrentTab} 
-              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-lg transition-colors text-sm font-medium"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-md transition-colors text-xs sm:text-sm font-medium"
               title="現在のタブのデータを空行にリセットします"
             >
-              <Eraser size={16} /> タブ消去
+              <Eraser size={14} /> タブ消去
             </button>
 
             <button 
               onClick={copyToClipboard} 
-              className={`flex items-center gap-1.5 px-3 py-2.5 rounded-t-lg transition-colors text-sm font-medium shadow-sm ${
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-t-md transition-colors text-xs sm:text-sm font-medium shadow-sm ${
                 isCopied 
                   ? "bg-emerald-500 text-white" 
                   : "bg-white border border-slate-200 border-b-0 text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {isCopied ? <Check size={16} /> : <Copy size={16} />}
-              {isCopied ? "コピー完了" : "Excelへコピー"}
+              {isCopied ? <Check size={14} /> : <Copy size={14} />}
+              {isCopied ? "コピー完了" : "Excelコピー"}
             </button>
             
             <button 
               onClick={renumberOrder} 
-              className="flex items-center gap-1.5 px-3 py-2.5 bg-slate-800 text-white hover:bg-slate-700 rounded-t-lg transition-colors text-sm font-medium shadow-sm"
+              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 text-white hover:bg-slate-700 rounded-t-md transition-colors text-xs sm:text-sm font-medium shadow-sm"
               title="出番を1番から順に振り直します"
             >
-              <ListOrdered size={16} /> 出番振り直し
+              <ListOrdered size={14} /> 出番振り直し
             </button>
           </div>
         </div>
 
-        {/* 表領域（ここだけ縦にスクロールし、ヘッダーは固定される） */}
-        <div className="bg-white rounded-b-xl rounded-tl-xl shadow-lg border border-slate-200 flex-1 overflow-y-auto mb-6 relative z-0">
+        {/* 表領域 */}
+        <div className="bg-white rounded-b-xl rounded-tl-xl shadow-lg border border-slate-200 flex-1 min-h-0 overflow-y-auto relative z-0">
           <table className="w-full border-collapse table-fixed">
             <colgroup>
-              <col className="w-10" />
+              <col className="w-9" />
               {COLUMNS.map((col, idx) => (
                 <col key={idx} className={col.width} />
               ))}
             </colgroup>
             <thead className="bg-slate-800 text-white sticky top-0 z-30 shadow-sm">
-              <tr className="text-sm tracking-wider">
-                <th className="py-3 px-2 font-medium"></th>
+              <tr className="text-xs sm:text-sm tracking-wider">
+                <th className="py-2.5 px-1.5 font-medium"></th>
                 {COLUMNS.map((col, idx) => (
-                  <th key={idx} className="py-3 px-3 text-left font-semibold">{col.name}</th>
+                  <th key={idx} className="py-2.5 px-2.5 text-left font-semibold">{col.name}</th>
                 ))}
               </tr>
             </thead>
@@ -704,21 +723,21 @@ export default function EquestrianApp() {
       {/* カスタム右クリックメニュー */}
       {contextMenu.visible && (
         <div
-          className="fixed z-[100] bg-white border border-slate-200 shadow-xl rounded-lg py-1.5 min-w-[180px] overflow-hidden"
+          className="fixed z-[100] bg-white border border-slate-200 shadow-xl rounded-lg py-1 min-w-[170px] overflow-hidden"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
             onClick={handleCopySingleRow}
-            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
+            className="w-full text-left px-3.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
           >
-            <Copy size={16} /> この行をコピー
+            <Copy size={14} /> この行をコピー
           </button>
           <button
             onClick={handleInsertRowAbove}
-            className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
+            className="w-full text-left px-3.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
           >
-            <ArrowUpToLine size={16} /> 上に空行を追加
+            <ArrowUpToLine size={14} /> 上に空行を追加
           </button>
         </div>
       )}
@@ -727,24 +746,24 @@ export default function EquestrianApp() {
       {modal.isOpen && (
         <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-6 py-5">
-              <div className="flex items-center gap-3 mb-4">
+            <div className="px-5 py-4">
+              <div className="flex items-center gap-2.5 mb-3">
                 {modal.type === "confirm" ? (
-                  <AlertTriangle className="text-amber-500" size={24} />
+                  <AlertTriangle className="text-amber-500 shrink-0" size={22} />
                 ) : (
-                  <Info className="text-emerald-500" size={24} />
+                  <Info className="text-emerald-500 shrink-0" size={22} />
                 )}
-                <h3 className="text-lg font-bold text-slate-800">{modal.title}</h3>
+                <h3 className="text-base font-bold text-slate-800">{modal.title}</h3>
               </div>
-              <p className="text-slate-600 whitespace-pre-wrap leading-relaxed">
+              <p className="text-slate-600 text-xs sm:text-sm whitespace-pre-wrap leading-relaxed">
                 {modal.message}
               </p>
             </div>
-            <div className="bg-slate-50 px-6 py-4 flex justify-end gap-3 border-t border-slate-100">
+            <div className="bg-slate-50 px-5 py-3 flex justify-end gap-2 border-t border-slate-100">
               {modal.type === "confirm" && (
                 <button 
                   onClick={closeModal} 
-                  className="px-4 py-2 text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                  className="px-3 py-1.5 text-xs sm:text-sm font-medium text-slate-600 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
                 >
                   キャンセル
                 </button>
@@ -754,7 +773,7 @@ export default function EquestrianApp() {
                   if (modal.onConfirm) modal.onConfirm();
                   closeModal();
                 }} 
-                className={`px-4 py-2 text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${modal.type === "confirm" ? modal.confirmColor : "bg-emerald-600 hover:bg-emerald-700"}`}
+                className={`px-3 py-1.5 text-xs sm:text-sm font-medium text-white rounded-lg transition-colors shadow-sm ${modal.type === "confirm" ? modal.confirmColor : "bg-emerald-600 hover:bg-emerald-700"}`}
               >
                 {modal.type === "confirm" ? modal.confirmLabel : "OK"}
               </button>
