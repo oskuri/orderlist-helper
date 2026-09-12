@@ -312,7 +312,7 @@ export default function EquestrianApp() {
   const [minIntervalThreshold, setMinIntervalThreshold] = useState<number>(5);
   const [isAnalyzerOpen, setIsAnalyzerOpen] = useState<boolean>(false);
 
-  // ホバー結び線（案1）用ステート
+  // ホバー結び線用ステート
   const [hoveredMatch, setHoveredMatch] = useState<HoveredMatch>(null);
   const [hoverBrackets, setHoverBrackets] = useState<{ top: number; height: number; gap: number }[]>([]);
 
@@ -626,7 +626,7 @@ export default function EquestrianApp() {
     }
   };
 
-  // ホバー結び線（案1）計算処理
+  // ホバー結び線計算処理（絶対スクロール位置基準で完全に正確に計算）
   const handleHoverCell = useCallback((type: "rider" | "horse", name: string) => {
     setHoveredMatch({ type, name });
   }, []);
@@ -637,7 +637,7 @@ export default function EquestrianApp() {
   }, []);
 
   useEffect(() => {
-    if (!hoveredMatch || !activeTab || !tableBodyRef.current) {
+    if (!hoveredMatch || !activeTab || !tableBodyRef.current || !tableWrapperRef.current) {
       setHoverBrackets([]);
       return;
     }
@@ -657,6 +657,8 @@ export default function EquestrianApp() {
     }
 
     const rowEls = tableBodyRef.current.querySelectorAll("tr[data-row-index]");
+    const wrapperRect = tableWrapperRef.current.getBoundingClientRect();
+    const scrollTop = tableWrapperRef.current.scrollTop;
     const brackets: { top: number; height: number; gap: number }[] = [];
 
     for (let i = 0; i < matchingRowIndices.length - 1; i++) {
@@ -667,8 +669,12 @@ export default function EquestrianApp() {
       const el2 = rowEls[r2] as HTMLElement;
 
       if (el1 && el2) {
-        const top1 = el1.offsetTop + el1.offsetHeight / 2;
-        const top2 = el2.offsetTop + el2.offsetHeight / 2;
+        const rect1 = el1.getBoundingClientRect();
+        const rect2 = el2.getBoundingClientRect();
+
+        // テーブル全体のスクロールコンテナを基準とした絶対Y座標計算（1行上のズレを完全修正）
+        const top1 = (rect1.top - wrapperRect.top) + scrollTop + rect1.height / 2;
+        const top2 = (rect2.top - wrapperRect.top) + scrollTop + rect2.height / 2;
         const height = top2 - top1;
         const gap = r2 - r1 - 1; // 間に入っている頭（出番）数
 
@@ -1093,15 +1099,15 @@ export default function EquestrianApp() {
             </tbody>
           </table>
 
-          {/* ホバー時カッコ（案1: HTML/CSS描画結び線） */}
+          {/* ホバー時カッコ描画（位置ずれ修正 ＆ 表示範囲を少し左側に配置して見切れ防止） */}
           {hoverBrackets.map((bracket, i) => (
             <div
               key={i}
-              className="absolute right-3 pointer-events-none z-30 flex items-center justify-end animate-in fade-in duration-150"
+              className="absolute right-12 pointer-events-none z-30 flex items-center justify-end animate-in fade-in duration-150"
               style={{
                 top: `${bracket.top}px`,
                 height: `${bracket.height}px`,
-                width: "44px",
+                width: "36px",
               }}
             >
               <div className="w-full h-full border-r-2 border-t-2 border-b-2 border-emerald-500 rounded-r-xl relative shadow-sm">
@@ -1269,7 +1275,6 @@ export default function EquestrianApp() {
                     </thead>
                     <tbody>
                       {searchResults.map((result, idx) => {
-                        // コピー時は対象競技名（タブ名）を除外し、7列のデータのみを出力
                         const rowCopyStr = result.row.values.join("\t");
                         return (
                           <tr
