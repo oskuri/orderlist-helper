@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, ArrowUpToLine, Eraser, ChevronLeft, ChevronRight, AlertTriangle, Info } from "lucide-react";
+import { Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, ArrowUpToLine, Eraser, ChevronLeft, ChevronRight, AlertTriangle, Info, Search, ExternalLink, X } from "lucide-react";
 
 // ――― 定数・型定義 ―――
 const COLUMNS = [
@@ -17,18 +17,18 @@ const COLUMNS = [
   { name: "所属", width: "w-72" },
 ];
 
-// 高コントラストな交差カラーパレット（暖色・寒色・明暗を交互に配置して判別しやすく設定）
+// 高コントラストな交差カラーパレット（暖色 → 寒色 → 明るい暖色 → 濃い寒色を交互に配置して一目で判別しやすく最適化）
 const COLOR_PALETTE = [
-  "bg-sky-100",     // 淡いスカイブルー
-  "bg-rose-100",    // 淡いローズ・赤系
-  "bg-amber-100",   // 淡い山吹色・アンバー
-  "bg-indigo-100",  // 落ち着いたインディゴ
-  "bg-emerald-100", // 鮮やかなエメラルドグリーン
-  "bg-orange-100",  // 明るいオレンジ
-  "bg-purple-100",  // パープル
-  "bg-lime-100",    // ライムグリーン
-  "bg-cyan-100",    // シアン
-  "bg-fuchsia-100", // フューシャピンク
+  "bg-sky-100",     // 淡いスカイブルー（寒色）
+  "bg-rose-100",    // 淡いローズ・赤系（暖色）
+  "bg-amber-100",   // 山吹色・アンバー（暖色）
+  "bg-indigo-100",  // 落ち着いたインディゴ（深寒色）
+  "bg-emerald-100", // エメラルドグリーン（中性・寒色系）
+  "bg-orange-100",  // 明るいオレンジ（鮮やか暖色）
+  "bg-purple-100",  // パープル（紫）
+  "bg-lime-100",    // ライムグリーン（明黄緑）
+  "bg-cyan-100",    // シアン（鮮やか青緑）
+  "bg-fuchsia-100", // フューシャピンク（鮮やかピンク）
   "bg-yellow-100",  // イエロー
   "bg-blue-100",    // ブルー
   "bg-teal-100",    // ティール
@@ -47,6 +47,7 @@ const COLOR_PALETTE = [
 
 type RowData = { id: string; values: string[] };
 type TabData = { id: string; name: string; rows: RowData[] };
+type SearchResult = { tabId: string; tabName: string; rowIndex: number; row: RowData };
 
 const createEmptyRows = (count: number): RowData[] =>
   Array.from({ length: count }, () => ({
@@ -62,7 +63,7 @@ const HighlightMatch = ({ text, query }: { text: string; query: string }) => {
     <>
       {parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase() ? (
-          <span key={i} className="font-bold text-emerald-600">
+          <span key={i} className="font-bold text-emerald-600 bg-emerald-100 px-0.5 rounded">
             {part}
           </span>
         ) : (
@@ -85,7 +86,7 @@ const SortableTab = ({ tab, isActive, onSelect, onUpdateName, onDelete }: any) =
       {...attributes}
       {...listeners}
       onClick={() => onSelect(tab.id)}
-      className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-t-lg cursor-grab transition-all ${
+      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-t-lg cursor-grab transition-all ${
         isActive 
           ? "bg-white shadow-[0_-2px_8px_rgba(0,0,0,0.05)] border-t-2 border-emerald-500 relative z-10" 
           : "bg-slate-200 hover:bg-slate-300 text-slate-500"
@@ -148,8 +149,8 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
       onContextMenu={(e) => onContextMenu(e, rowIndex)}
       className={`border-b border-slate-100 bg-white hover:bg-slate-50 transition-colors group ${focusedCol !== null ? "relative z-40" : "relative z-10"}`}
     >
-      <td className="p-0.5 text-center">
-        <button {...attributes} {...listeners} className="cursor-grab text-slate-300 hover:text-slate-500 opacity-50 group-hover:opacity-100 transition-opacity">
+      <td className="p-0 text-center">
+        <button {...attributes} {...listeners} className="cursor-grab text-slate-300 hover:text-slate-500 opacity-50 group-hover:opacity-100 transition-opacity p-1">
           <GripVertical size={14} />
         </button>
       </td>
@@ -199,7 +200,7 @@ const SortableRow = ({ row, rowIndex, updateCell, handlePaste, duplicateColors, 
                 }
               }}
               onPaste={(e) => handlePaste(e, rowIndex, colIndex)}
-              className="w-full h-full px-2.5 py-1.5 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-xs sm:text-sm"
+              className="w-full h-full px-2 py-1 bg-transparent outline-none transition-all duration-150 focus:bg-white focus:ring-2 focus:ring-emerald-400 focus:relative focus:z-10 text-slate-700 text-xs sm:text-sm"
               autoComplete="off"
             />
             
@@ -244,7 +245,14 @@ export default function EquestrianApp() {
   
   const tabContainerRef = useRef<HTMLDivElement>(null);
 
-  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; rowIndex: number | null }>({
+  // 検索機能のステート
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [isSearchFocused, setIsSearchFocused] = useState<boolean>(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState<boolean>(false);
+  const [activeSearchSuggestionIndex, setActiveSearchSuggestionIndex] = useState<number>(-1);
+  const searchDropdownRef = useRef<HTMLDivElement>(null);
+
+  const [contextMenu, setContextMenu] = useState<{ visible: boolean; x: number; y: number; rowIndex: number | null; customText?: string }>({
     visible: false, x: 0, y: 0, rowIndex: null
   });
 
@@ -449,25 +457,32 @@ export default function EquestrianApp() {
     }
   };
 
-  const handleContextMenu = (e: React.MouseEvent, rowIndex: number) => {
+  const handleContextMenu = (e: React.MouseEvent, rowIndex: number, customText?: string) => {
     e.preventDefault();
     setContextMenu({
       visible: true,
       x: e.clientX,
       y: e.clientY,
-      rowIndex: rowIndex
+      rowIndex: rowIndex,
+      customText: customText
     });
   };
 
   const handleCopySingleRow = async () => {
-    if (contextMenu.rowIndex === null || !activeTab) return;
-    const targetRow = activeTab.rows[contextMenu.rowIndex];
-    const copyString = targetRow.values.join("\t");
-
-    try {
-      await navigator.clipboard.writeText(copyString);
-    } catch (err) {
-      showAlert("エラー", "コピーに失敗しました。");
+    if (contextMenu.customText !== undefined) {
+      try {
+        await navigator.clipboard.writeText(contextMenu.customText);
+      } catch (err) {
+        showAlert("エラー", "コピーに失敗しました。");
+      }
+    } else if (contextMenu.rowIndex !== null && activeTab) {
+      const targetRow = activeTab.rows[contextMenu.rowIndex];
+      const copyString = targetRow.values.join("\t");
+      try {
+        await navigator.clipboard.writeText(copyString);
+      } catch (err) {
+        showAlert("エラー", "コピーに失敗しました。");
+      }
     }
     setContextMenu((prev) => ({ ...prev, visible: false }));
   };
@@ -543,9 +558,14 @@ export default function EquestrianApp() {
     const riders = new Set<string>();
     const horses = new Set<string>();
     const affiliations = new Set<string>();
+    const allValues = new Set<string>();
 
     tabs.forEach((tab) => {
       tab.rows.forEach((row) => {
+        row.values.forEach((v) => {
+          const val = v.trim();
+          if (val) allValues.add(val);
+        });
         if (row.values[2].trim()) riders.add(row.values[2].trim());
         if (row.values[4].trim()) horses.add(row.values[4].trim());
         if (row.values[6].trim()) affiliations.add(row.values[6].trim());
@@ -555,24 +575,70 @@ export default function EquestrianApp() {
     return {
       riders: Array.from(riders),
       horses: Array.from(horses),
-      affiliations: Array.from(affiliations)
+      affiliations: Array.from(affiliations),
+      all: Array.from(allValues)
     };
   }, [tabs]);
+
+  // 全体検索候補のフィルタリング
+  const filteredSearchSuggestions = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+    return suggestions.all.filter((item) => item.toLowerCase().includes(query)).slice(0, 10);
+  }, [searchQuery, suggestions.all]);
+
+  // 検索モーダル用の検索結果リスト
+  const searchResults = useMemo<SearchResult[]>(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    const results: SearchResult[] = [];
+    tabs.forEach((tab) => {
+      tab.rows.forEach((row, rowIndex) => {
+        const match = row.values.some((val) => val.toLowerCase().includes(query));
+        if (match) {
+          results.push({
+            tabId: tab.id,
+            tabName: tab.name,
+            rowIndex: rowIndex,
+            row: row
+          });
+        }
+      });
+    });
+    return results;
+  }, [searchQuery, tabs]);
+
+  const handleExecuteSearch = (queryToSearch?: string) => {
+    const targetQuery = queryToSearch !== undefined ? queryToSearch : searchQuery;
+    if (!targetQuery.trim()) {
+      showAlert("検索エラー", "検索キーワードを入力してください。");
+      return;
+    }
+    setSearchQuery(targetQuery);
+    setIsSearchFocused(false);
+    setIsSearchModalOpen(true);
+  };
+
+  const handleJumpToTab = (tabId: string) => {
+    setActiveTabId(tabId);
+    setIsSearchModalOpen(false);
+  };
 
   if (!isLoaded || !activeTab) return null;
 
   const duplicateColors = getDuplicateColors();
 
   return (
-    <div className="h-screen bg-slate-100 p-3 sm:p-4 font-sans text-slate-800 flex flex-col overflow-hidden">
-      <div className="w-full max-w-[95%] xl:max-w-7xl mx-auto h-full flex flex-col min-h-0">
+    <div className="h-screen bg-slate-100 p-2 sm:p-3 font-sans text-slate-800 flex flex-col overflow-hidden">
+      <div className="w-full max-w-[98%] xl:max-w-7xl mx-auto h-full flex flex-col min-h-0">
         
         {/* ヘッダー＆コントロール */}
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3 bg-white px-4 py-3 rounded-xl shadow-sm border border-slate-200 shrink-0">
-          <div className="flex items-center gap-3 flex-1 min-w-[300px]">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 mb-2 bg-white px-3.5 py-2.5 rounded-xl shadow-sm border border-slate-200 shrink-0">
+          <div className="flex items-center gap-2.5 flex-1 min-w-[280px]">
             <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-2xl" role="img" aria-label="horse">🐴</span>
-              <h1 className="text-lg font-bold tracking-tight text-slate-800 shrink-0">
+              <span className="text-xl" role="img" aria-label="horse">🐴</span>
+              <h1 className="text-base font-bold tracking-tight text-slate-800 shrink-0">
                 Order List Helper
               </h1>
             </div>
@@ -581,19 +647,99 @@ export default function EquestrianApp() {
               placeholder="大会名を入力 (例: 第3回 〇〇馬術大会)"
               value={tournamentName}
               onChange={(e) => setTournamentName(e.target.value)}
-              className="flex-1 text-sm sm:text-base font-medium text-slate-700 placeholder-slate-400 border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none py-0.5 bg-transparent transition-colors"
+              className="flex-1 text-xs sm:text-sm font-medium text-slate-700 placeholder-slate-400 border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none py-0.5 bg-transparent transition-colors min-w-[120px]"
             />
           </div>
+
+          {/* 検索入力ウィンドウ */}
+          <div className="relative min-w-[200px] sm:min-w-[260px] flex-1 max-w-sm">
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                placeholder="全シートから検索 (選手, 馬名, 所属...)"
+                value={searchQuery}
+                onFocus={() => setIsSearchFocused(true)}
+                onBlur={() => setTimeout(() => setIsSearchFocused(false), 200)}
+                onChange={(e) => {
+                  setSearchQuery(e.target.value);
+                  setIsSearchFocused(true);
+                  setActiveSearchSuggestionIndex(-1);
+                }}
+                onKeyDown={(e) => {
+                  if (isSearchFocused && filteredSearchSuggestions.length > 0) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
+                      setActiveSearchSuggestionIndex((prev) => Math.min(prev + 1, filteredSearchSuggestions.length - 1));
+                      return;
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setActiveSearchSuggestionIndex((prev) => Math.max(prev - 1, 0));
+                      return;
+                    } else if (e.key === "Enter" && activeSearchSuggestionIndex >= 0) {
+                      e.preventDefault();
+                      const selected = filteredSearchSuggestions[activeSearchSuggestionIndex];
+                      setSearchQuery(selected);
+                      handleExecuteSearch(selected);
+                      return;
+                    }
+                  }
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleExecuteSearch();
+                  }
+                }}
+                className="w-full pl-8 pr-16 py-1 text-xs sm:text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-slate-50 focus:bg-white transition-all"
+              />
+              <Search size={14} className="absolute left-2.5 text-slate-400 pointer-events-none" />
+              <button
+                onClick={() => handleExecuteSearch()}
+                className="absolute right-1 px-2 py-0.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded transition-colors"
+              >
+                検索
+              </button>
+            </div>
+
+            {/* 検索結果候補ドロップダウン */}
+            {isSearchFocused && filteredSearchSuggestions.length > 0 && (
+              <div
+                ref={searchDropdownRef}
+                className="absolute top-full left-0 w-full mt-1 bg-white border border-emerald-200 shadow-2xl z-50 max-h-52 overflow-y-auto rounded-lg flex flex-col"
+              >
+                <div className="px-2.5 py-1 text-[11px] font-semibold text-slate-400 bg-slate-50 border-b border-slate-100">
+                  入力候補 (エンターで検索)
+                </div>
+                {filteredSearchSuggestions.map((suggestion, i) => {
+                  const isActive = i === activeSearchSuggestionIndex;
+                  return (
+                    <div
+                      key={suggestion}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        setSearchQuery(suggestion);
+                        handleExecuteSearch(suggestion);
+                      }}
+                      className={`px-3 py-1.5 text-xs cursor-pointer border-b border-slate-50 last:border-none transition-colors flex items-center justify-between ${
+                        isActive ? "bg-emerald-50 text-emerald-800 font-medium" : "text-slate-700 hover:bg-emerald-50 hover:text-emerald-800"
+                      }`}
+                    >
+                      <span><HighlightMatch text={suggestion} query={searchQuery} /></span>
+                      <Search size={11} className="text-slate-300" />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
           
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={requestClearAllData} className="flex items-center gap-1.5 bg-white border border-red-200 text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-xs sm:text-sm">
-              <Trash2 size={14} /> 全クリア
+          <div className="flex items-center gap-1.5 shrink-0">
+            <button onClick={requestClearAllData} className="flex items-center gap-1 bg-white border border-red-200 text-red-600 px-2.5 py-1 rounded-lg hover:bg-red-50 hover:border-red-300 transition-colors shadow-sm font-medium text-xs">
+              <Trash2 size={13} /> 全クリア
             </button>
-            <button onClick={exportData} className="flex items-center gap-1.5 bg-white border border-slate-300 text-slate-700 px-3 py-1.5 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs sm:text-sm">
-              <Download size={14} /> 保存 (エクスポート)
+            <button onClick={exportData} className="flex items-center gap-1 bg-white border border-slate-300 text-slate-700 px-2.5 py-1 rounded-lg hover:bg-slate-50 transition-colors shadow-sm font-medium text-xs">
+              <Download size={13} /> 保存
             </button>
-            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1.5 bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium text-xs sm:text-sm">
-              <Upload size={14} /> 読込 (インポート)
+            <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-1 bg-emerald-600 text-white px-2.5 py-1 rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium text-xs">
+              <Upload size={13} /> 読込
             </button>
             <input type="file" accept=".json" ref={fileInputRef} onChange={importData} className="hidden" />
           </div>
@@ -604,10 +750,10 @@ export default function EquestrianApp() {
           <div className="flex items-center mr-3 min-w-0" style={{ flex: "1 1 auto" }}>
             <button 
               onClick={() => scrollTabs("left")} 
-              className="p-1.5 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-l-md transition-colors shrink-0"
+              className="p-1 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-l-md transition-colors shrink-0"
               title="左へスクロール"
             >
-              <ChevronLeft size={15} />
+              <ChevronLeft size={14} />
             </button>
             
             <div 
@@ -635,47 +781,47 @@ export default function EquestrianApp() {
 
             <button 
               onClick={() => scrollTabs("right")} 
-              className="p-1.5 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-r-md transition-colors shrink-0"
+              className="p-1 mb-0.5 bg-slate-200 text-slate-500 hover:text-emerald-600 hover:bg-slate-300 rounded-r-md transition-colors shrink-0"
               title="右へスクロール"
             >
-              <ChevronRight size={15} />
+              <ChevronRight size={14} />
             </button>
           </div>
           
           <div className="flex items-center gap-1 shrink-0 pb-0.5">
             <button 
               onClick={addTab} 
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-md transition-colors text-xs sm:text-sm font-medium"
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-200 text-slate-600 hover:text-emerald-600 hover:bg-slate-300 rounded-t-md transition-colors text-xs font-medium"
             >
-              <Plus size={14} /> タブ追加
+              <Plus size={13} /> タブ追加
             </button>
             
             <button 
               onClick={requestClearCurrentTab} 
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-md transition-colors text-xs sm:text-sm font-medium"
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-200 text-slate-600 hover:text-red-600 hover:bg-red-100 rounded-t-md transition-colors text-xs font-medium"
               title="現在のタブのデータを空行にリセットします"
             >
-              <Eraser size={14} /> タブ消去
+              <Eraser size={13} /> タブ消去
             </button>
 
             <button 
               onClick={copyToClipboard} 
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-t-md transition-colors text-xs sm:text-sm font-medium shadow-sm ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded-t-md transition-colors text-xs font-medium shadow-sm ${
                 isCopied 
                   ? "bg-emerald-500 text-white" 
                   : "bg-white border border-slate-200 border-b-0 text-slate-700 hover:bg-slate-50"
               }`}
             >
-              {isCopied ? <Check size={14} /> : <Copy size={14} />}
+              {isCopied ? <Check size={13} /> : <Copy size={13} />}
               {isCopied ? "コピー完了" : "Excelコピー"}
             </button>
             
             <button 
               onClick={renumberOrder} 
-              className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 text-white hover:bg-slate-700 rounded-t-md transition-colors text-xs sm:text-sm font-medium shadow-sm"
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 text-white hover:bg-slate-700 rounded-t-md transition-colors text-xs font-medium shadow-sm"
               title="出番を1番から順に振り直します"
             >
-              <ListOrdered size={14} /> 出番振り直し
+              <ListOrdered size={13} /> 出番振り直し
             </button>
           </div>
         </div>
@@ -684,16 +830,16 @@ export default function EquestrianApp() {
         <div className="bg-white rounded-b-xl rounded-tl-xl shadow-lg border border-slate-200 flex-1 min-h-0 overflow-y-auto relative z-0">
           <table className="w-full border-collapse table-fixed">
             <colgroup>
-              <col className="w-9" />
+              <col className="w-8" />
               {COLUMNS.map((col, idx) => (
                 <col key={idx} className={col.width} />
               ))}
             </colgroup>
             <thead className="bg-slate-800 text-white sticky top-0 z-30 shadow-sm">
-              <tr className="text-xs sm:text-sm tracking-wider">
-                <th className="py-2.5 px-1.5 font-medium"></th>
+              <tr className="text-xs tracking-wider">
+                <th className="py-2 px-1 font-medium"></th>
                 {COLUMNS.map((col, idx) => (
-                  <th key={idx} className="py-2.5 px-2.5 text-left font-semibold">{col.name}</th>
+                  <th key={idx} className="py-2 px-2 text-left font-semibold">{col.name}</th>
                 ))}
               </tr>
             </thead>
@@ -723,29 +869,121 @@ export default function EquestrianApp() {
       {/* カスタム右クリックメニュー */}
       {contextMenu.visible && (
         <div
-          className="fixed z-[100] bg-white border border-slate-200 shadow-xl rounded-lg py-1 min-w-[170px] overflow-hidden"
+          className="fixed z-[150] bg-white border border-slate-200 shadow-xl rounded-lg py-1 min-w-[170px] overflow-hidden"
           style={{ top: contextMenu.y, left: contextMenu.x }}
           onContextMenu={(e) => e.preventDefault()}
         >
           <button
             onClick={handleCopySingleRow}
-            className="w-full text-left px-3.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
+            className="w-full text-left px-3.5 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
           >
-            <Copy size={14} /> この行をコピー
+            <Copy size={13} /> この行をコピー
           </button>
-          <button
-            onClick={handleInsertRowAbove}
-            className="w-full text-left px-3.5 py-1.5 text-xs sm:text-sm text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
-          >
-            <ArrowUpToLine size={14} /> 上に空行を追加
-          </button>
+          {contextMenu.customText === undefined && (
+            <button
+              onClick={handleInsertRowAbove}
+              className="w-full text-left px-3.5 py-1.5 text-xs text-slate-700 hover:bg-emerald-50 hover:text-emerald-800 flex items-center gap-2 transition-colors"
+            >
+              <ArrowUpToLine size={13} /> 上に空行を追加
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 全体検索結果モーダル */}
+      {isSearchModalOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[85vh] flex flex-col overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            {/* モーダルヘッダー */}
+            <div className="px-5 py-3.5 bg-slate-800 text-white flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2">
+                <Search size={18} className="text-emerald-400" />
+                <h3 className="text-base font-bold">
+                  検索結果一覧
+                </h3>
+                <span className="text-xs bg-slate-700 text-slate-200 px-2 py-0.5 rounded-full ml-2">
+                  キーワード: 「<span className="text-emerald-300 font-semibold">{searchQuery}</span>」 ({searchResults.length}件該当)
+                </span>
+              </div>
+              <button
+                onClick={() => setIsSearchModalOpen(false)}
+                className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-700"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* モーダル本文（結果テーブル） */}
+            <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+              {searchResults.length === 0 ? (
+                <div className="text-center py-12 text-slate-400 text-sm">
+                  該当するデータが見つかりませんでした。
+                </div>
+              ) : (
+                <div className="bg-white rounded-lg border border-slate-200 shadow-sm overflow-hidden">
+                  <table className="w-full border-collapse text-xs text-left">
+                    <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-semibold">
+                      <tr>
+                        <th className="py-2 px-3 border-r border-slate-200 bg-slate-200/60 w-32">対象競技 (タブ)</th>
+                        {COLUMNS.map((col, idx) => (
+                          <th key={idx} className="py-2 px-2.5 border-r border-slate-200 last:border-r-0">{col.name}</th>
+                        ))}
+                        <th className="py-2 px-3 text-center w-24">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {searchResults.map((result, idx) => {
+                        const rowCopyStr = `${result.tabName}\t${result.row.values.join("\t")}`;
+                        return (
+                          <tr
+                            key={`${result.tabId}-${result.rowIndex}-${idx}`}
+                            onContextMenu={(e) => handleContextMenu(e, result.rowIndex, rowCopyStr)}
+                            className="border-b border-slate-100 hover:bg-emerald-50/50 transition-colors group"
+                          >
+                            <td className="py-2 px-3 font-semibold text-emerald-900 bg-slate-50 border-r border-slate-200 group-hover:bg-emerald-100/40">
+                              {result.tabName}
+                            </td>
+                            {result.row.values.map((val, cIdx) => (
+                              <td key={cIdx} className="py-2 px-2.5 border-r border-slate-100 last:border-r-0 text-slate-700">
+                                <HighlightMatch text={val} query={searchQuery} />
+                              </td>
+                            ))}
+                            <td className="py-1.5 px-2 text-center">
+                              <button
+                                onClick={() => handleJumpToTab(result.tabId)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-medium text-[11px] transition-colors shadow-sm"
+                                title="このタブに切り替えます"
+                              >
+                                <ExternalLink size={12} /> 移動
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* モーダルフッター */}
+            <div className="px-5 py-2.5 bg-white border-t border-slate-200 flex items-center justify-between text-xs text-slate-500 shrink-0">
+              <div>💡 検索結果の行を右クリックすると、その行のデータをコピーできます。</div>
+              <button
+                onClick={() => setIsSearchModalOpen(false)}
+                className="px-4 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition-colors"
+              >
+                閉じる
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* カスタム モーダル (アラート＆確認ポップアップ) */}
       {modal.isOpen && (
         <div className="fixed inset-0 z-[200] bg-slate-900/40 flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             <div className="px-5 py-4">
               <div className="flex items-center gap-2.5 mb-3">
                 {modal.type === "confirm" ? (
