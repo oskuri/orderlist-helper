@@ -1000,6 +1000,11 @@ function EditorPage({ initialId }: { initialId: string }) {
     setSearchQuery(targetQuery); setIsSearchFocused(false); setIsSearchModalOpen(true);
   };
 
+  const handleJumpToTab = (tabId: string) => {
+    setActiveTabId(tabId);
+    setIsSearchModalOpen(false);
+  };
+
   if (!isLoaded || !activeTab) return null;
 
   return (
@@ -1147,6 +1152,7 @@ function EditorPage({ initialId }: { initialId: string }) {
             </tbody>
           </table>
 
+          {/* ホバー時カッコ描画 */}
           {hoverBrackets.map((bracket, i) => (
             <div key={i} className="absolute right-12 pointer-events-none z-30 flex items-center justify-end animate-in fade-in duration-150" style={{ top: `${bracket.top}px`, height: `${bracket.height}px`, width: "36px" }}>
               <div className="w-full h-full border-r-2 border-t-2 border-b-2 border-emerald-500 rounded-r-xl relative shadow-sm">
