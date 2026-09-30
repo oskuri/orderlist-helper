@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, horizontalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -8,7 +9,7 @@ import {
   Plus, Download, Upload, Trash2, GripVertical, ListOrdered, Copy, Check, 
   ArrowUpToLine, Eraser, ChevronLeft, ChevronRight, AlertTriangle, Info, Search, 
   ExternalLink, X, Clock, FileSpreadsheet, SlidersHorizontal, CheckCircle2,
-  Share2, Cloud, CloudOff, RefreshCw, Lock, Unlock, Loader2, Trophy, ArrowRight
+  Share2, Cloud, CloudOff, RefreshCw, Lock, Unlock, Loader2
 } from "lucide-react";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
@@ -63,9 +64,16 @@ type HoveredMatch = {
   name: string;
 } | null;
 
+// ID生成の安全なフォールバック
+const generateId = () => {
+  return typeof crypto !== "undefined" && crypto.randomUUID 
+    ? crypto.randomUUID() 
+    : "id-" + Math.random().toString(36).substring(2, 15);
+};
+
 const createEmptyRows = (count: number): RowData[] =>
   Array.from({ length: count }, () => ({
-    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).substring(2, 15),
+    id: generateId(),
     values: Array(7).fill(""),
   }));
 
@@ -133,18 +141,8 @@ const SortableTab = ({ tab, isActive, isEditable, onSelect, onUpdateName, onDele
 
 // ――― 行コンポーネント ―――
 const SortableRow = ({ 
-  row, 
-  rowIndex, 
-  isEditable,
-  updateCell, 
-  handlePaste, 
-  duplicateColors, 
-  intervalWarnings, 
-  suggestions, 
-  onContextMenu,
-  hoveredMatch,
-  onHoverCell,
-  onLeaveCell
+  row, rowIndex, isEditable, updateCell, handlePaste, duplicateColors, intervalWarnings, 
+  suggestions, onContextMenu, hoveredMatch, onHoverCell, onLeaveCell
 }: any) => {
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -317,6 +315,7 @@ const SortableRow = ({
 
 // ――― ウェルカム画面（トップページ）コンポーネント ―――
 function WelcomePage() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
@@ -325,11 +324,11 @@ function WelcomePage() {
 
   const handleCreateNew = async () => {
     setIsCreating(true);
-    const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 10);
+    const newId = generateId().slice(0, 8);
     
     if (supabase) {
-      const initialTab = { id: crypto.randomUUID(), name: "第1競技", rows: createEmptyRows(100) };
-      await supabase.from("tournaments").insert({
+      const initialTab = { id: generateId(), name: "第1競技", rows: createEmptyRows(100) };
+      const { error } = await supabase.from("tournaments").insert({
         id: newId,
         name: "無題の大会",
         data: { 
@@ -339,11 +338,15 @@ function WelcomePage() {
           editPassword: password
         }
       });
+      if (error) {
+        alert("大会の作成に失敗しました。時間をおいて再度お試しください。");
+        setIsCreating(false);
+        return;
+      }
     }
 
     sessionStorage.setItem(`eq_auth_${newId}`, password);
-    // ページ遷移（同じページ内でクエリパラメータを付与してリロード）
-    window.location.href = `/?id=${newId}`;
+    router.push(`/?id=${newId}`);
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,8 +358,8 @@ function WelcomePage() {
         const result = event.target?.result as string;
         JSON.parse(result); 
         localStorage.setItem("equestrian-data-v3", result);
-        const newId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID().slice(0, 8) : Math.random().toString(36).substring(2, 10);
-        window.location.href = `/?id=${newId}`;
+        const newId = generateId().slice(0, 8);
+        router.push(`/?id=${newId}`);
       } catch (err) {
         alert("ファイルの読み込みに失敗しました。正しいJSONファイルを選択してください。");
       }
@@ -420,15 +423,13 @@ function WelcomePage() {
 
 // ――― エディタ画面コンポーネント ―――
 function EditorPage({ initialId }: { initialId: string }) {
+  const router = useRouter();
   const [tournamentId, setTournamentId] = useState<string>(initialId);
   const [tournamentName, setTournamentName] = useState<string>("");
   const [tabs, setTabs] = useState<TabData[]>([]);
   const [activeTabId, setActiveTabId] = useState<string>("");
   
-  const [sessionId] = useState<string>(() => {
-    if (typeof window !== "undefined" && typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
-    return "temp-" + Math.random().toString(36).substring(2, 15);
-  });
+  const [sessionId] = useState<string>(() => generateId());
 
   const [isEditable, setIsEditable] = useState<boolean>(false);
   const [savedPassword, setSavedPassword] = useState<string>("");
@@ -499,7 +500,7 @@ function EditorPage({ initialId }: { initialId: string }) {
             if (parsed.minIntervalThreshold !== undefined) setMinIntervalThreshold(parsed.minIntervalThreshold);
           } catch (e) { console.error(e); }
         } else {
-          const initialTab = { id: crypto.randomUUID(), name: "第1競技", rows: createEmptyRows(100) };
+          const initialTab = { id: generateId(), name: "第1競技", rows: createEmptyRows(100) };
           setTabs([initialTab]);
           setActiveTabId(initialTab.id);
         }
@@ -508,29 +509,31 @@ function EditorPage({ initialId }: { initialId: string }) {
       }
 
       try {
-        const { data } = await supabase.from("tournaments").select("*").eq("id", initialId).single();
-        if (data && data.data) {
-          const payload = data.data;
-          setTournamentName(data.name || payload.tournamentName || "");
-          setTabs(payload.tabs || []);
-          setActiveTabId(payload.activeTabId || (payload.tabs?.[0]?.id || ""));
-          if (payload.minIntervalThreshold !== undefined) setMinIntervalThreshold(payload.minIntervalThreshold);
-          
-          const dbPassword = payload.editPassword || "";
-          setSavedPassword(dbPassword);
-          if (payload.lockInfo) setLockInfo(payload.lockInfo);
+        const { data, error } = await supabase.from("tournaments").select("*").eq("id", initialId).single();
+        if (error || !data) {
+          // IDが見つからない場合はトップページへ戻す
+          router.push("/");
+          return;
+        }
 
-          const isRemoteLocked = payload.lockInfo && payload.lockInfo.lockedBy !== sessionId && payload.lockInfo.lockedUntil > Date.now();
-          const sessionPw = sessionStorage.getItem(`eq_auth_${initialId}`);
+        const payload = data.data;
+        setTournamentName(data.name || payload.tournamentName || "");
+        setTabs(payload.tabs || []);
+        setActiveTabId(payload.activeTabId || (payload.tabs?.[0]?.id || ""));
+        if (payload.minIntervalThreshold !== undefined) setMinIntervalThreshold(payload.minIntervalThreshold);
+        
+        const dbPassword = payload.editPassword || "";
+        setSavedPassword(dbPassword);
+        if (payload.lockInfo) setLockInfo(payload.lockInfo);
 
-          if ((dbPassword === "" || sessionPw === dbPassword) && !isRemoteLocked) {
-            setIsEditable(true);
-            setLockInfo({ lockedBy: sessionId, lockedUntil: Date.now() + 30000 });
-          } else {
-            setIsEditable(false);
-          }
+        const isRemoteLocked = payload.lockInfo && payload.lockInfo.lockedBy !== sessionId && payload.lockInfo.lockedUntil > Date.now();
+        const sessionPw = sessionStorage.getItem(`eq_auth_${initialId}`);
+
+        if ((dbPassword === "" || sessionPw === dbPassword) && !isRemoteLocked) {
+          setIsEditable(true);
+          setLockInfo({ lockedBy: sessionId, lockedUntil: Date.now() + 30000 });
         } else {
-          window.location.href = "/";
+          setIsEditable(false);
         }
       } catch (err) {
         console.error("Supabase load error:", err);
@@ -539,7 +542,7 @@ function EditorPage({ initialId }: { initialId: string }) {
       }
     };
     initData();
-  }, [sessionId, initialId]);
+  }, [sessionId, initialId, router]);
 
   useEffect(() => {
     if (!supabase || !tournamentId) return;
@@ -553,8 +556,7 @@ function EditorPage({ initialId }: { initialId: string }) {
             setTournamentName(payload.new.name || remoteData.tournamentName || "");
             if (remoteData.tabs) setTabs(remoteData.tabs);
             
-            // タブの同期を解除
-            // if (remoteData.activeTabId) setActiveTabId(remoteData.activeTabId);
+            // ★改善1: 他端末のタブ同期を解除（activeTabIdをセットしない）
             
             if (remoteData.minIntervalThreshold !== undefined) setMinIntervalThreshold(remoteData.minIntervalThreshold);
             if (remoteData.lockInfo) setLockInfo(remoteData.lockInfo);
@@ -576,7 +578,7 @@ function EditorPage({ initialId }: { initialId: string }) {
 
     if (!isEditable || isRemoteUpdateRef.current || !supabase || !tournamentId) return;
 
-    // データが変わっていなければ保存処理を行わない
+    // ★改善2: タブの切り替え(activeTabId)だけでは保存通信を走らせない
     const isDataChanged = 
       prevDataRef.current.tabs !== tabs || 
       prevDataRef.current.tournamentName !== tournamentName || 
@@ -678,7 +680,7 @@ function EditorPage({ initialId }: { initialId: string }) {
 
   const addTab = () => {
     if (!isEditable) return;
-    const newTab = { id: crypto.randomUUID(), name: `新競技 ${tabs.length + 1}`, rows: createEmptyRows(100) };
+    const newTab = { id: generateId(), name: `新競技 ${tabs.length + 1}`, rows: createEmptyRows(100) };
     setTabs([...tabs, newTab]);
     setActiveTabId(newTab.id);
     setTimeout(() => scrollTabs("right"), 100);
@@ -742,7 +744,7 @@ function EditorPage({ initialId }: { initialId: string }) {
   const requestClearAllData = () => {
     if (!isEditable) return;
     showConfirm("全データのクリア確認", "全てのタブのデータを削除し、初期状態に戻します。\n本当によろしいですか？", "全データ消去", "bg-red-600 hover:bg-red-700", () => {
-      const initialTab = { id: crypto.randomUUID(), name: "第1競技", rows: createEmptyRows(100) };
+      const initialTab = { id: generateId(), name: "第1競技", rows: createEmptyRows(100) };
       setTabs([initialTab]); setActiveTabId(initialTab.id); setTournamentName("");
     });
   };
@@ -828,7 +830,7 @@ function EditorPage({ initialId }: { initialId: string }) {
 
   const handleInsertRowAbove = () => {
     if (contextMenu.rowIndex === null || !activeTab || !isEditable) return;
-    const newEmptyRow = { id: crypto.randomUUID(), values: Array(7).fill("") };
+    const newEmptyRow = { id: generateId(), values: Array(7).fill("") };
     const newRows = [...activeTab.rows];
     newRows.splice(contextMenu.rowIndex, 0, newEmptyRow);
     setTabs(tabs.map((t) => (t.id === activeTabId ? { ...t, rows: newRows } : t)));
@@ -1152,7 +1154,6 @@ function EditorPage({ initialId }: { initialId: string }) {
             </tbody>
           </table>
 
-          {/* ホバー時カッコ描画 */}
           {hoverBrackets.map((bracket, i) => (
             <div key={i} className="absolute right-12 pointer-events-none z-30 flex items-center justify-end animate-in fade-in duration-150" style={{ top: `${bracket.top}px`, height: `${bracket.height}px`, width: "36px" }}>
               <div className="w-full h-full border-r-2 border-t-2 border-b-2 border-emerald-500 rounded-r-xl relative shadow-sm">
@@ -1325,29 +1326,22 @@ function EditorPage({ initialId }: { initialId: string }) {
   );
 }
 
+// ――― ルーティング用ラッパー ―――
+function AppRouter() {
+  const searchParams = useSearchParams();
+  const id = searchParams.get("id");
+
+  if (id) {
+    return <EditorPage initialId={id} />;
+  }
+  return <WelcomePage />;
+}
+
 // ――― アプリのメイン（エントリ）コンポーネント ―――
 export default function MainApp() {
-  const [mode, setMode] = useState<"loading" | "welcome" | "editor">("loading");
-  const [currentId, setCurrentId] = useState("");
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const id = params.get("id");
-    if (id) {
-      setCurrentId(id);
-      setMode("editor");
-    } else {
-      setMode("welcome");
-    }
-  }, []);
-
-  if (mode === "loading") {
-    return <div className="h-screen bg-slate-50 flex items-center justify-center text-slate-500">Loading...</div>;
-  }
-  
-  if (mode === "welcome") {
-    return <WelcomePage />;
-  }
-  
-  return <EditorPage initialId={currentId} />;
+  return (
+    <Suspense fallback={<div className="h-screen bg-slate-50 flex items-center justify-center text-slate-500">Loading...</div>}>
+      <AppRouter />
+    </Suspense>
+  );
 }
